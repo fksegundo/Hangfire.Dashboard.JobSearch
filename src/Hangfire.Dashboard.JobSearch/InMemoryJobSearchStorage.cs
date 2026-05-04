@@ -83,6 +83,32 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         return Task.CompletedTask;
     }
 
+    public Task UpdateStateAsync(
+        string jobId,
+        string state,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(jobId))
+        {
+            throw new ArgumentException("Job id is required.", nameof(jobId));
+        }
+
+        if (string.IsNullOrWhiteSpace(state))
+        {
+            throw new ArgumentException("State is required.", nameof(state));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_metadata.TryGetValue(jobId, out var metadata))
+        {
+            metadata.State = state;
+            _metadata[jobId] = CloneMetadata(metadata);
+        }
+
+        return Task.CompletedTask;
+    }
+
     private static bool MatchesQuery(JobSearchResult result, JobSearchQuery query)
     {
         if (!string.IsNullOrWhiteSpace(query.State)

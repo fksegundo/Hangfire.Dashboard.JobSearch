@@ -14,6 +14,11 @@ public interface IJobSearchStorage
         JobSearchQuery query,
         CancellationToken cancellationToken = default);
 
+    Task UpdateStateAsync(
+        string jobId,
+        string state,
+        CancellationToken cancellationToken = default);
+
     Task DeleteMetadataAsync(
         string jobId,
         CancellationToken cancellationToken = default);

@@ -111,6 +111,30 @@ public sealed class InMemoryJobSearchStorageTests
         Assert.Equal(0, page.TotalCount);
     }
 
+    [Fact]
+    public async Task UpdateStateAsync_UpdatesExistingMetadata()
+    {
+        var storage = new InMemoryJobSearchStorage();
+        await storage.SaveMetadataAsync("1", CreateMetadata("1", state: "Enqueued"));
+
+        await storage.UpdateStateAsync("1", "Succeeded");
+
+        var page = await storage.SearchAsync(new JobSearchQuery { State = "Succeeded" });
+        var result = Assert.Single(page.Items);
+        Assert.Equal("1", result.JobId);
+    }
+
+    [Fact]
+    public async Task UpdateStateAsync_DoesNothingWhenJobDoesNotExist()
+    {
+        var storage = new InMemoryJobSearchStorage();
+
+        await storage.UpdateStateAsync("missing", "Failed");
+
+        var page = await storage.SearchAsync(new JobSearchQuery { State = "Failed" });
+        Assert.Empty(page.Items);
+    }
+
     private static JobSearchMetadata CreateMetadata(
         string jobId,
         string documento = "123",
