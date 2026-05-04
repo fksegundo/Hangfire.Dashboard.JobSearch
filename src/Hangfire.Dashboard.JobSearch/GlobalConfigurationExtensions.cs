@@ -1,10 +1,14 @@
 using System;
 using Hangfire;
+using Hangfire.Dashboard;
 
 namespace Hangfire.Dashboard.JobSearch;
 
 public static class GlobalConfigurationExtensions
 {
+    private static readonly object SyncRoot = new object();
+    private static bool _dashboardRegistered;
+
     public static IGlobalConfiguration UseJobSearch(
         this IGlobalConfiguration configuration,
         IServiceProvider serviceProvider)
@@ -31,6 +35,30 @@ public static class GlobalConfigurationExtensions
             throw new InvalidOperationException("JobSearchStateFilter is not registered in the service provider.");
         }
 
-        return configuration.UseFilter(clientFilter).UseFilter(stateFilter);
+        configuration.UseFilter(clientFilter).UseFilter(stateFilter);
+        RegisterDashboard(serviceProvider);
+
+        return configuration;
+    }
+
+    private static void RegisterDashboard(IServiceProvider serviceProvider)
+    {
+        lock (SyncRoot)
+        {
+            if (_dashboardRegistered)
+            {
+                return;
+            }
+
+            var dispatcher = new JobSearchDashboardDispatcher(serviceProvider);
+            DashboardRoutes.Routes.Add("/job-search", dispatcher);
+
+            NavigationMenu.Items.Add(page => new MenuItem("Job Search", page.Url.To("/job-search"))
+            {
+                Active = page.RequestPath.StartsWith("/job-search", StringComparison.OrdinalIgnoreCase)
+            });
+
+            _dashboardRegistered = true;
+        }
     }
 }
