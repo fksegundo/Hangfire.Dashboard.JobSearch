@@ -109,8 +109,42 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         return Task.CompletedTask;
     }
 
+    public Task<IReadOnlyDictionary<string, int>> CountByStateAsync(
+        JobSearchQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        if (query is null)
+        {
+            throw new ArgumentNullException(nameof(query));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var baseQuery = new JobSearchQuery
+        {
+            JobId = query.JobId,
+            JobType = query.JobType,
+            State = null,
+            Filters = new Dictionary<string, string>(query.Filters, StringComparer.Ordinal)
+        };
+
+        var counts = _metadata.Values
+            .Select(ToResult)
+            .Where(result => MatchesQuery(result, baseQuery))
+            .GroupBy(result => result.State ?? string.Empty, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
+        return Task.FromResult<IReadOnlyDictionary<string, int>>(counts);
+    }
+
     private static bool MatchesQuery(JobSearchResult result, JobSearchQuery query)
     {
+        if (!string.IsNullOrWhiteSpace(query.JobId)
+            && !string.Equals(result.JobId, query.JobId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         if (!string.IsNullOrWhiteSpace(query.State)
             && !string.Equals(result.State, query.State, StringComparison.Ordinal))
         {
@@ -139,13 +173,35 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         IEnumerable<JobSearchResult> results,
         JobSearchQuery query)
     {
-        var sortBy = query.SortBy;
-        if (!string.IsNullOrWhiteSpace(sortBy))
+        var sorts = query.Sorts.Where(sort => !string.IsNullOrWhiteSpace(sort.Field)).ToList();
+        if (sorts.Count == 0 && !string.IsNullOrWhiteSpace(query.SortBy))
         {
-            var sortField = sortBy!;
-            return query.SortDescending
-                ? results.OrderByDescending(result => GetSortValue(result, sortField)).ThenBy(result => result.JobId, StringComparer.Ordinal)
-                : results.OrderBy(result => GetSortValue(result, sortField)).ThenBy(result => result.JobId, StringComparer.Ordinal);
+            sorts.Add(new JobSearchSort { Field = query.SortBy!, Descending = query.SortDescending });
+        }
+
+        if (sorts.Count > 0)
+        {
+            IOrderedEnumerable<JobSearchResult>? ordered = null;
+
+            foreach (var sort in sorts)
+            {
+                var field = sort.Field;
+                if (ordered is null)
+                {
+                    ordered = sort.Descending
+                        ? results.OrderByDescending(result => GetSortValue(result, field))
+                        : results.OrderBy(result => GetSortValue(result, field));
+                }
+                else
+                {
+                    ordered = sort.Descending
+                        ? ordered.ThenByDescending(result => GetSortValue(result, field))
+                        : ordered.ThenBy(result => GetSortValue(result, field));
+                }
+            }
+
+            return (ordered ?? results.OrderByDescending(result => result.CreatedAt))
+                .ThenBy(result => result.JobId, StringComparer.Ordinal);
         }
 
         return results.OrderByDescending(result => result.CreatedAt).ThenBy(result => result.JobId, StringComparer.Ordinal);
@@ -153,6 +209,31 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
 
     private static SortValue GetSortValue(JobSearchResult result, string fieldName)
     {
+        if (string.Equals(fieldName, "JobId", StringComparison.Ordinal))
+        {
+            return SortValue.From(result.JobId);
+        }
+
+        if (string.Equals(fieldName, "State", StringComparison.Ordinal))
+        {
+            return SortValue.From(result.State);
+        }
+
+        if (string.Equals(fieldName, "JobType", StringComparison.Ordinal))
+        {
+            return SortValue.From(result.JobType);
+        }
+
+        if (string.Equals(fieldName, "MethodName", StringComparison.Ordinal))
+        {
+            return SortValue.From(result.MethodName);
+        }
+
+        if (string.Equals(fieldName, "CreatedAt", StringComparison.Ordinal))
+        {
+            return SortValue.From(result.CreatedAt.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture));
+        }
+
         result.Fields.TryGetValue(fieldName, out var value);
         return SortValue.From(value);
     }

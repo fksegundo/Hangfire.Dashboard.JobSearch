@@ -14,14 +14,14 @@ public sealed class FilterAndRegistrationTests
         var options = new JobSearchOptions();
         var definition = new JobSearchDefinition
         {
-            JobType = typeof(ReportWorker),
-            MethodName = nameof(ReportWorker.GerarRelatorioAsync)
+            JobType = typeof(WorkerA),
+            MethodName = nameof(WorkerA.RunJobAsync)
         };
         definition.Fields.Add(new JobSearchField
         {
-            Name = "Documento",
+            Name = "Field1",
             ArgumentIndex = 0,
-            JsonPath = "$.Documento"
+            JsonPath = "$.Field1"
         });
         options.AddJobDefinition(definition);
 
@@ -30,11 +30,11 @@ public sealed class FilterAndRegistrationTests
         var logger = new ListLogger<JobSearchClientFilter>();
         var filter = new JobSearchClientFilter(options, extractor, storage, logger);
 
-        filter.ProcessCreatedJob("job-1", CreateJob(new ReportArgs { Documento = "12345678900" }));
+        filter.ProcessCreatedJob("job-1", CreateJob(new JobAArgs { Field1 = "12345678900" }));
 
         var page = await storage.SearchAsync(new JobSearchQuery
         {
-            Filters = { ["Documento"] = "12345678900" }
+            Filters = { ["Field1"] = "12345678900" }
         });
 
         var result = Assert.Single(page.Items);
@@ -50,8 +50,8 @@ public sealed class FilterAndRegistrationTests
         await storage.SaveMetadataAsync("job-1", new JobSearchMetadata
         {
             JobId = "job-1",
-            JobType = "ReportWorker",
-            MethodName = "GerarRelatorioAsync",
+            JobType = "WorkerA",
+            MethodName = "RunJobAsync",
             State = "Enqueued",
             CreatedAt = DateTimeOffset.UtcNow
         });
@@ -76,15 +76,15 @@ public sealed class FilterAndRegistrationTests
         {
             options.AddJobDefinition(new JobSearchDefinition
             {
-                JobType = typeof(ReportWorker),
-                MethodName = nameof(ReportWorker.GerarRelatorioAsync),
+                JobType = typeof(WorkerA),
+                MethodName = nameof(WorkerA.RunJobAsync),
                 Fields =
                 {
                     new JobSearchField
                     {
-                        Name = "Documento",
+                        Name = "Field1",
                         ArgumentIndex = 0,
-                        JsonPath = "$.Documento"
+                        JsonPath = "$.Field1"
                     }
                 }
             });
@@ -99,6 +99,45 @@ public sealed class FilterAndRegistrationTests
     }
 
     [Fact]
+    public void AddHangfireJobSearch_UsesInMemoryStorageByDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHangfireJobSearch(options =>
+        {
+            options.AddJobDefinition(new JobSearchDefinition
+            {
+                JobType = typeof(WorkerA),
+                MethodName = nameof(WorkerA.RunJobAsync)
+            });
+        });
+
+        var provider = services.BuildServiceProvider();
+        var storage = provider.GetRequiredService<IJobSearchStorage>();
+        Assert.IsType<InMemoryJobSearchStorage>(storage);
+    }
+
+    [Fact]
+    public void AddHangfireJobSearch_UsesCustomStorageType()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHangfireJobSearch(options =>
+        {
+            options.AddJobDefinition(new JobSearchDefinition
+            {
+                JobType = typeof(WorkerA),
+                MethodName = nameof(WorkerA.RunJobAsync)
+            });
+            options.UseStorage<TestStorage>();
+        });
+
+        var provider = services.BuildServiceProvider();
+        var storage = provider.GetRequiredService<IJobSearchStorage>();
+        Assert.IsType<TestStorage>(storage);
+    }
+
+    [Fact]
     public void UseJobSearch_ResolvesAndRegistersFilters()
     {
         var services = new ServiceCollection();
@@ -107,15 +146,15 @@ public sealed class FilterAndRegistrationTests
         {
             options.AddJobDefinition(new JobSearchDefinition
             {
-                JobType = typeof(ReportWorker),
-                MethodName = nameof(ReportWorker.GerarRelatorioAsync),
+                JobType = typeof(WorkerA),
+                MethodName = nameof(WorkerA.RunJobAsync),
                 Fields =
                 {
                     new JobSearchField
                     {
-                        Name = "Documento",
+                        Name = "Field1",
                         ArgumentIndex = 0,
-                        JsonPath = "$.Documento"
+                        JsonPath = "$.Field1"
                     }
                 }
             });
@@ -129,25 +168,25 @@ public sealed class FilterAndRegistrationTests
         Assert.NotNull(result);
     }
 
-    private static Job CreateJob(ReportArgs args)
+    private static Job CreateJob(JobAArgs args)
     {
-        var method = typeof(ReportWorker).GetMethod(
-            nameof(ReportWorker.GerarRelatorioAsync),
+        var method = typeof(WorkerA).GetMethod(
+            nameof(WorkerA.RunJobAsync),
             BindingFlags.Instance | BindingFlags.Public);
-        return new Job(typeof(ReportWorker), method!, new object?[] { args });
+        return new Job(typeof(WorkerA), method!, new object?[] { args });
     }
 
-    public sealed class ReportWorker
+    public sealed class WorkerA
     {
-        public Task GerarRelatorioAsync(ReportArgs args)
+        public Task RunJobAsync(JobAArgs args)
         {
             return Task.CompletedTask;
         }
     }
 
-    public sealed class ReportArgs
+    public sealed class JobAArgs
     {
-        public string? Documento { get; set; }
+        public string? Field1 { get; set; }
     }
 
     private sealed class ListLogger<T> : ILogger<T>
@@ -175,6 +214,34 @@ public sealed class FilterAndRegistrationTests
             {
                 Errors.Add(formatter(state, exception));
             }
+        }
+    }
+
+    private sealed class TestStorage : IJobSearchStorage
+    {
+        public Task DeleteMetadataAsync(string jobId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<JobSearchResultPage> SearchAsync(JobSearchQuery query, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new JobSearchResultPage());
+        }
+
+        public Task SaveMetadataAsync(string jobId, JobSearchMetadata metadata, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateStateAsync(string jobId, string state, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyDictionary<string, int>> CountByStateAsync(JobSearchQuery query, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyDictionary<string, int>>(new Dictionary<string, int>());
         }
     }
 

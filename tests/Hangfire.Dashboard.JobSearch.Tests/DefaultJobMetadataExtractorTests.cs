@@ -11,16 +11,16 @@ public sealed class DefaultJobMetadataExtractorTests
         var extractor = CreateExtractor(
             new JobSearchField
             {
-                Name = "Documento",
+                Name = "Field1",
                 ArgumentIndex = 0,
-                JsonPath = "$.Documento"
+                JsonPath = "$.Field1"
             });
 
-        var job = CreateReportJob(new ReportArgs { Documento = "12345678900" });
+        var job = CreateJobA(new JobAArgs { Field1 = "12345678900" });
 
         var fields = extractor.Extract(job);
 
-        Assert.Equal("12345678900", fields["Documento"]);
+        Assert.Equal("12345678900", fields["Field1"]);
     }
 
     [Fact]
@@ -29,19 +29,19 @@ public sealed class DefaultJobMetadataExtractorTests
         var extractor = CreateExtractor(
             new JobSearchField
             {
-                Name = "Documento",
+                Name = "Field1",
                 ArgumentIndex = 0,
-                JsonPath = "$.Filtro.Documento"
+                JsonPath = "$.Nested.Field1"
             });
 
-        var job = CreateReportJob(new ReportArgs
+        var job = CreateJobA(new JobAArgs
         {
-            Filtro = new ReportFilter { Documento = "98765432100" }
+            Nested = new NestedData { Field1 = "98765432100" }
         });
 
         var fields = extractor.Extract(job);
 
-        Assert.Equal("98765432100", fields["Documento"]);
+        Assert.Equal("98765432100", fields["Field1"]);
     }
 
     [Fact]
@@ -50,14 +50,14 @@ public sealed class DefaultJobMetadataExtractorTests
         var extractor = CreateExtractor(
             new JobSearchField
             {
-                Name = "Documento",
+                Name = "Field1",
                 ArgumentIndex = 0,
-                JsonPath = "$.Documento"
+                JsonPath = "$.Field1"
             });
 
-        var job = CreateJob<OtherWorker>(
-            nameof(OtherWorker.GerarRelatorioAsync),
-            new ReportArgs { Documento = "12345678900" });
+        var job = CreateJob<WorkerB>(
+            nameof(WorkerB.RunJobAsync),
+            new JobAArgs { Field1 = "12345678900" });
 
         var fields = extractor.Extract(job);
 
@@ -70,14 +70,14 @@ public sealed class DefaultJobMetadataExtractorTests
         var extractor = CreateExtractor(
             new JobSearchField
             {
-                Name = "Documento",
+                Name = "Field1",
                 ArgumentIndex = 0,
-                JsonPath = "$.Documento"
+                JsonPath = "$.Field1"
             });
 
-        var job = CreateJob<ReportWorker>(
-            nameof(ReportWorker.OutroMetodoAsync),
-            new ReportArgs { Documento = "12345678900" });
+        var job = CreateJob<WorkerA>(
+            nameof(WorkerA.RunAnotherAsync),
+            new JobAArgs { Field1 = "12345678900" });
 
         var fields = extractor.Extract(job);
 
@@ -90,16 +90,16 @@ public sealed class DefaultJobMetadataExtractorTests
         var extractor = CreateExtractor(
             new JobSearchField
             {
-                Name = "Documento",
+                Name = "Field1",
                 ArgumentIndex = 0,
-                JsonPath = "$.Documento"
+                JsonPath = "$.Field1"
             });
 
-        var job = CreateReportJob(null);
+        var job = CreateJobA(null);
 
         var fields = extractor.Extract(job);
 
-        Assert.Null(fields["Documento"]);
+        Assert.Null(fields["Field1"]);
     }
 
     private static DefaultJobMetadataExtractor CreateExtractor(params JobSearchField[] fields)
@@ -107,8 +107,8 @@ public sealed class DefaultJobMetadataExtractorTests
         var options = new JobSearchOptions();
         var definition = new JobSearchDefinition
         {
-            JobType = typeof(ReportWorker),
-            MethodName = nameof(ReportWorker.GerarRelatorioAsync)
+            JobType = typeof(WorkerA),
+            MethodName = nameof(WorkerA.RunJobAsync)
         };
 
         definition.Fields.AddRange(fields);
@@ -117,48 +117,48 @@ public sealed class DefaultJobMetadataExtractorTests
         return new DefaultJobMetadataExtractor(options);
     }
 
-    private static Job CreateReportJob(ReportArgs? args)
+    private static Job CreateJobA(JobAArgs? args)
     {
-        return CreateJob<ReportWorker>(nameof(ReportWorker.GerarRelatorioAsync), args);
+        return CreateJob<WorkerA>(nameof(WorkerA.RunJobAsync), args);
     }
 
-    private static Job CreateJob<TWorker>(string methodName, ReportArgs? args)
+    private static Job CreateJob<TWorker>(string methodName, JobAArgs? args)
     {
         var method = typeof(TWorker).GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public);
 
         return new Job(typeof(TWorker), method!, new object?[] { args });
     }
 
-    public sealed class ReportWorker
+    public sealed class WorkerA
     {
-        public Task GerarRelatorioAsync(ReportArgs? args)
+        public Task RunJobAsync(JobAArgs? args)
         {
             return Task.CompletedTask;
         }
 
-        public Task OutroMetodoAsync(ReportArgs args)
-        {
-            return Task.CompletedTask;
-        }
-    }
-
-    public sealed class OtherWorker
-    {
-        public Task GerarRelatorioAsync(ReportArgs args)
+        public Task RunAnotherAsync(JobAArgs args)
         {
             return Task.CompletedTask;
         }
     }
 
-    public sealed class ReportArgs
+    public sealed class WorkerB
     {
-        public string? Documento { get; set; }
-
-        public ReportFilter? Filtro { get; set; }
+        public Task RunJobAsync(JobAArgs args)
+        {
+            return Task.CompletedTask;
+        }
     }
 
-    public sealed class ReportFilter
+    public sealed class JobAArgs
     {
-        public string? Documento { get; set; }
+        public string? Field1 { get; set; }
+
+        public NestedData? Nested { get; set; }
+    }
+
+    public sealed class NestedData
+    {
+        public string? Field1 { get; set; }
     }
 }

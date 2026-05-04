@@ -25,10 +25,27 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(options);
         services.AddSingleton<IJobMetadataExtractor, DefaultJobMetadataExtractor>();
-        services.AddSingleton<IJobSearchStorage, InMemoryJobSearchStorage>();
+        RegisterStorage(services, options);
         services.AddSingleton<JobSearchClientFilter>();
         services.AddSingleton<JobSearchStateFilter>();
 
         return services;
+    }
+
+    private static void RegisterStorage(IServiceCollection services, JobSearchOptions options)
+    {
+        if (options.StorageFactory is not null)
+        {
+            services.AddSingleton<IJobSearchStorage>(provider => options.StorageFactory(provider));
+            return;
+        }
+
+        if (options.StorageType is not null)
+        {
+            services.AddSingleton(typeof(IJobSearchStorage), options.StorageType);
+            return;
+        }
+
+        services.AddSingleton<IJobSearchStorage, InMemoryJobSearchStorage>();
     }
 }

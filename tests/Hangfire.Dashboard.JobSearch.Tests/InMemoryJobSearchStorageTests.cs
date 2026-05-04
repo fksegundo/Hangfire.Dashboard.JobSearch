@@ -6,12 +6,12 @@ public sealed class InMemoryJobSearchStorageTests
     public async Task SearchAsync_ReturnsResultsByOneField()
     {
         var storage = new InMemoryJobSearchStorage();
-        await storage.SaveMetadataAsync("1", CreateMetadata("1", documento: "123", clienteId: "42"));
-        await storage.SaveMetadataAsync("2", CreateMetadata("2", documento: "456", clienteId: "42"));
+        await storage.SaveMetadataAsync("1", CreateMetadata("1", field1: "123", field2: "42"));
+        await storage.SaveMetadataAsync("2", CreateMetadata("2", field1: "456", field2: "42"));
 
         var page = await storage.SearchAsync(new JobSearchQuery
         {
-            Filters = { ["Documento"] = "123" }
+            Filters = { ["Field1"] = "123" }
         });
 
         var result = Assert.Single(page.Items);
@@ -20,19 +20,35 @@ public sealed class InMemoryJobSearchStorageTests
     }
 
     [Fact]
+    public async Task SearchAsync_FiltersByJobId()
+    {
+        var storage = new InMemoryJobSearchStorage();
+        await storage.SaveMetadataAsync("job-1", CreateMetadata("job-1", field1: "123"));
+        await storage.SaveMetadataAsync("job-2", CreateMetadata("job-2", field1: "123"));
+
+        var page = await storage.SearchAsync(new JobSearchQuery
+        {
+            JobId = "job-2"
+        });
+
+        var result = Assert.Single(page.Items);
+        Assert.Equal("job-2", result.JobId);
+    }
+
+    [Fact]
     public async Task SearchAsync_ReturnsResultsByTwoFields()
     {
         var storage = new InMemoryJobSearchStorage();
-        await storage.SaveMetadataAsync("1", CreateMetadata("1", documento: "123", clienteId: "42"));
-        await storage.SaveMetadataAsync("2", CreateMetadata("2", documento: "123", clienteId: "99"));
-        await storage.SaveMetadataAsync("3", CreateMetadata("3", documento: "456", clienteId: "42"));
+        await storage.SaveMetadataAsync("1", CreateMetadata("1", field1: "123", field2: "42"));
+        await storage.SaveMetadataAsync("2", CreateMetadata("2", field1: "123", field2: "99"));
+        await storage.SaveMetadataAsync("3", CreateMetadata("3", field1: "456", field2: "42"));
 
         var page = await storage.SearchAsync(new JobSearchQuery
         {
             Filters =
             {
-                ["Documento"] = "123",
-                ["ClienteId"] = "42"
+                ["Field1"] = "123",
+                ["Field2"] = "42"
             }
         });
 
@@ -82,29 +98,49 @@ public sealed class InMemoryJobSearchStorageTests
     public async Task SearchAsync_SortsByNumericField()
     {
         var storage = new InMemoryJobSearchStorage();
-        await storage.SaveMetadataAsync("1", CreateMetadata("1", clienteId: "42"));
-        await storage.SaveMetadataAsync("2", CreateMetadata("2", clienteId: "7"));
-        await storage.SaveMetadataAsync("3", CreateMetadata("3", clienteId: "99"));
+        await storage.SaveMetadataAsync("1", CreateMetadata("1", field2: "42"));
+        await storage.SaveMetadataAsync("2", CreateMetadata("2", field2: "7"));
+        await storage.SaveMetadataAsync("3", CreateMetadata("3", field2: "99"));
 
         var page = await storage.SearchAsync(new JobSearchQuery
         {
-            SortBy = "ClienteId"
+            SortBy = "Field2"
         });
 
         Assert.Equal(new[] { "2", "1", "3" }, page.Items.Select(item => item.JobId));
     }
 
     [Fact]
+    public async Task SearchAsync_SortsByMultipleFields()
+    {
+        var storage = new InMemoryJobSearchStorage();
+        await storage.SaveMetadataAsync("1", CreateMetadata("1", field2: "42", state: "Processing"));
+        await storage.SaveMetadataAsync("2", CreateMetadata("2", field2: "7", state: "Succeeded"));
+        await storage.SaveMetadataAsync("3", CreateMetadata("3", field2: "99", state: "Succeeded"));
+
+        var page = await storage.SearchAsync(new JobSearchQuery
+        {
+            Sorts = new List<JobSearchSort>
+            {
+                new JobSearchSort { Field = "State", Descending = false },
+                new JobSearchSort { Field = "Field2", Descending = true }
+            }
+        });
+
+        Assert.Equal(new[] { "1", "3", "2" }, page.Items.Select(item => item.JobId));
+    }
+
+    [Fact]
     public async Task DeleteMetadataAsync_RemovesResult()
     {
         var storage = new InMemoryJobSearchStorage();
-        await storage.SaveMetadataAsync("1", CreateMetadata("1", documento: "123"));
+        await storage.SaveMetadataAsync("1", CreateMetadata("1", field1: "123"));
 
         await storage.DeleteMetadataAsync("1");
 
         var page = await storage.SearchAsync(new JobSearchQuery
         {
-            Filters = { ["Documento"] = "123" }
+            Filters = { ["Field1"] = "123" }
         });
 
         Assert.Empty(page.Items);
@@ -137,22 +173,22 @@ public sealed class InMemoryJobSearchStorageTests
 
     private static JobSearchMetadata CreateMetadata(
         string jobId,
-        string documento = "123",
-        string clienteId = "42",
+        string field1 = "123",
+        string field2 = "42",
         string state = "Enqueued",
         DateTimeOffset? createdAt = null)
     {
         return new JobSearchMetadata
         {
             JobId = jobId,
-            JobType = "ReportWorker",
-            MethodName = "GerarRelatorioAsync",
+            JobType = "WorkerA",
+            MethodName = "RunJobAsync",
             State = state,
             CreatedAt = createdAt ?? DateTimeOffset.Parse("2026-05-03T10:00:00Z"),
             Fields =
             {
-                ["Documento"] = documento,
-                ["ClienteId"] = clienteId
+                ["Field1"] = field1,
+                ["Field2"] = field2
             }
         };
     }

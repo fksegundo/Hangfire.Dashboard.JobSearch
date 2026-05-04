@@ -50,8 +50,7 @@ public static class GlobalConfigurationExtensions
                 return;
             }
 
-            var dispatcher = new JobSearchDashboardDispatcher(serviceProvider);
-            DashboardRoutes.Routes.Add("/job-search", dispatcher);
+            DashboardRoutes.Routes.Add("/job-search", new JobSearchDashboardRazorDispatcher(serviceProvider));
 
             NavigationMenu.Items.Add(page => new MenuItem("Job Search", page.Url.To("/job-search"))
             {
