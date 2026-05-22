@@ -167,6 +167,14 @@ Planned topics:
 - broader dashboard actions, if they can be integrated without forking Hangfire;
 - packaging metadata for NuGet publication.
 
-## Documentation
+## License
 
-The initial design spec is available at [docs/hangfire-dashboard-job-search-spec.md](docs/hangfire-dashboard-job-search-spec.md).
+This repository is licensed under [Apache-2.0](LICENSE).
+
+## Third-Party Licenses
+
+This project depends on third-party packages. Those dependencies keep their own license terms, and usage/distribution must comply with each dependency license.
+
+For Hangfire packages, see the official licensing page:
+
+- https://www.hangfire.io/licenses.html
