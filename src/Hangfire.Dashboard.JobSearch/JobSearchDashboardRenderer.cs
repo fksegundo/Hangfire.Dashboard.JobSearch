@@ -41,17 +41,74 @@ internal static class JobSearchDashboardRenderer
         html.Append(".hfjs-pager .pagination>li>a{color:var(--hfjs-link);background:var(--hfjs-bg);border-color:var(--hfjs-border);}");
         html.Append(".hfjs-pager .pagination>li.active>a{background:var(--hfjs-link);border-color:var(--hfjs-link);color:#fff;}");
         html.Append(".hfjs-toolbar .form-control,.hfjs-filters .form-control{max-width:100%;}");
-        html.Append(".hfjs-live{font-size:12px;color:var(--hfjs-muted);margin-bottom:8px;}");
+        html.Append(".hfjs-live-bar{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--hfjs-muted);margin-bottom:8px;}");
+        html.Append(".hfjs-toggle-btn{cursor:pointer;background:var(--hfjs-chip);border:1px solid var(--hfjs-border);color:var(--hfjs-text);padding:2px 10px;border-radius:12px;font-size:12px;line-height:1.4;}");
+        html.Append(".hfjs-toggle-btn:hover{background:var(--hfjs-border);}");
+        html.Append(".hfjs-advanced{margin-bottom:12px;border:1px solid var(--hfjs-border);border-radius:6px;background:var(--hfjs-head);}");
+        html.Append(".hfjs-advanced>summary{padding:8px 12px;cursor:pointer;font-weight:600;color:var(--hfjs-text);user-select:none;list-style:none;display:flex;align-items:center;}");
+        html.Append(".hfjs-advanced>summary::-webkit-details-marker{display:none;}");
+        html.Append(".hfjs-advanced>summary::before{content:'\\25B6';display:inline-block;margin-right:6px;font-size:9px;transition:transform 0.15s;}");
+        html.Append(".hfjs-advanced[open]>summary::before{transform:rotate(90deg);}");
+        html.Append(".hfjs-advanced>.hfjs-filters{padding:10px 12px;margin-bottom:0;background:var(--hfjs-bg);border-top:1px solid var(--hfjs-border);border-radius:0 0 6px 6px;}");
+        html.Append(".hfjs-active-count{margin-left:8px;padding:1px 8px;background:var(--hfjs-link);color:#fff;border-radius:10px;font-size:11px;font-weight:normal;}");
+        html.Append(".hfjs-expand{cursor:pointer;background:none;border:none;padding:0 4px;color:var(--hfjs-link);font-size:11px;display:inline-block;transition:transform 0.15s;}");
+        html.Append(".hfjs-expand:hover{background:var(--hfjs-chip);border-radius:3px;}");
+        html.Append(".hfjs-expand[data-expanded='true']{transform:rotate(90deg);}");
+        html.Append(".hfjs-child-count{background:var(--hfjs-chip);padding:1px 8px;border-radius:10px;font-size:11px;margin-right:6px;color:var(--hfjs-text);}");
+        html.Append(".hfjs-child-row>td{background:var(--hfjs-head);padding:6px 10px 6px 30px;font-size:12px;}");
+        html.Append(".hfjs-child-arrow{color:var(--hfjs-muted);margin-right:6px;}");
+        html.Append(".hfjs-child-id{background:var(--hfjs-chip);padding:1px 6px;border-radius:3px;font-family:monospace;font-size:11px;margin-right:8px;}");
+        html.Append(".hfjs-child-row .hfjs-state{margin-right:8px;}");
+        html.Append(".hfjs-child-method,.hfjs-child-time,.hfjs-child-field{margin-right:10px;color:var(--hfjs-muted);font-size:11px;}");
+        html.Append(".hfjs-child-field b{color:var(--hfjs-text);font-weight:600;}");
+        html.Append(".hfjs-child-view{margin-left:8px;color:var(--hfjs-link);}");
+        html.Append(".hfjs-child-count-empty{opacity:0.55;font-style:italic;}");
+        html.Append(".hfjs-state{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;line-height:1.4;text-transform:uppercase;letter-spacing:0.3px;}");
+        html.Append(".hfjs-state-processing{background:#dbeafe;color:#1e40af;}");
+        html.Append(".hfjs-state-enqueued{background:#e5e7eb;color:#374151;}");
+        html.Append(".hfjs-state-succeeded{background:#d1fae5;color:#065f46;}");
+        html.Append(".hfjs-state-failed{background:#fee2e2;color:#991b1b;}");
+        html.Append(".hfjs-state-scheduled{background:#fed7aa;color:#9a3412;}");
+        html.Append(".hfjs-state-deleted{background:#d1d5db;color:#1f2937;}");
+        html.Append(".hfjs-state-awaiting{background:#fef3c7;color:#92400e;}");
+        html.Append(".hfjs-state-unknown{background:var(--hfjs-chip);color:var(--hfjs-text);}");
+        html.Append("@media (prefers-color-scheme: dark){");
+        html.Append(".hfjs-state-processing{background:#1e3a8a;color:#bfdbfe;}");
+        html.Append(".hfjs-state-enqueued{background:#374151;color:#e5e7eb;}");
+        html.Append(".hfjs-state-succeeded{background:#064e3b;color:#a7f3d0;}");
+        html.Append(".hfjs-state-failed{background:#7f1d1d;color:#fecaca;}");
+        html.Append(".hfjs-state-scheduled{background:#7c2d12;color:#fed7aa;}");
+        html.Append(".hfjs-state-deleted{background:#374151;color:#9ca3af;}");
+        html.Append(".hfjs-state-awaiting{background:#78350f;color:#fde68a;}");
+        html.Append("}");
         html.Append("</style>");
 
         html.Append("<h1 class=\"page-header\">Job Search</h1>");
-        html.Append("<div class=\"hfjs-live\">Live refresh: every 5s</div>");
+        html.Append("<div class=\"hfjs-live-bar\"><span>Live refresh: <span id=\"hfjs-status\">every 5s</span></span><button type=\"button\" id=\"hfjs-toggle\" class=\"hfjs-toggle-btn\">Pause</button></div>");
         RenderSortSummary(html, model);
         RenderFilterForm(html, model);
         RenderResultsTable(html, model);
         RenderPager(html, model);
         RenderAutoRefreshScript(html);
+        RenderExpandScript(html);
         return html.ToString();
+    }
+
+    private static void RenderExpandScript(StringBuilder html)
+    {
+        html.Append("<script>(function(){try{");
+        html.Append("function esc(s){return s.replace(/(['\"\\\\])/g,'\\\\$1');}");
+        html.Append("var btns=document.querySelectorAll('.hfjs-expand');");
+        html.Append("for(var i=0;i<btns.length;i++){(function(btn){");
+        html.Append("btn.addEventListener('click',function(){");
+        html.Append("var target=btn.getAttribute('data-target');");
+        html.Append("var expanded=btn.getAttribute('data-expanded')==='true';");
+        html.Append("var rows=document.querySelectorAll('.hfjs-child-row[data-parent=\"'+esc(target)+'\"]');");
+        html.Append("for(var j=0;j<rows.length;j++){rows[j].style.display=expanded?'none':'';}");
+        html.Append("btn.setAttribute('data-expanded',expanded?'false':'true');");
+        html.Append("});");
+        html.Append("})(btns[i]);}");
+        html.Append("}catch(e){}})();</script>");
     }
 
     private static void RenderSortSummary(StringBuilder html, JobSearchDashboardViewModel model)
@@ -84,6 +141,21 @@ internal static class JobSearchDashboardRenderer
 
         if (model.FilterableFields.Count > 0)
         {
+            var activeCount = model.FilterableFields.Count(f =>
+                model.Query.Filters.TryGetValue(f, out var v) && !string.IsNullOrEmpty(v));
+            var isOpen = activeCount > 0;
+
+            html.Append("<details class=\"hfjs-advanced\"");
+            if (isOpen) html.Append(" open");
+            html.Append("><summary>Filters");
+            if (activeCount > 0)
+            {
+                html.Append("<span class=\"hfjs-active-count\">")
+                    .Append(activeCount)
+                    .Append(" active</span>");
+            }
+            html.Append("</summary>");
+
             html.Append("<div class=\"hfjs-filters\">");
             foreach (var field in model.FilterableFields)
             {
@@ -91,7 +163,7 @@ internal static class JobSearchDashboardRenderer
                 RenderInput(html, field, $"f_{field}", value ?? string.Empty);
             }
 
-            html.Append("</div>");
+            html.Append("</div></details>");
         }
 
         RenderHiddenInput(html, "sort", BuildSortQuery(model.Query.Sorts));
@@ -115,11 +187,24 @@ internal static class JobSearchDashboardRenderer
 
         html.Append("<th>Details</th></tr></thead><tbody>");
 
+        var columnCount = 5 + model.DisplayFields.Count;
+
         foreach (var item in model.Result.Items)
         {
-            html.Append("<tr>")
-                .Append("<td>").Append(E(item.JobId)).Append("</td>")
-                .Append("<td>").Append(E(item.State)).Append("</td>")
+            var hasJoin = item.Children is not null;
+            var hasChildren = hasJoin && item.Children!.Count > 0;
+            var parentId = E(item.JobId);
+
+            html.Append("<tr>");
+            html.Append("<td>");
+            if (hasChildren)
+            {
+                html.Append("<button type=\"button\" class=\"hfjs-expand\" data-target=\"")
+                    .Append(parentId)
+                    .Append("\" data-expanded=\"false\" title=\"Toggle children\">&#9654;</button> ");
+            }
+            html.Append(parentId).Append("</td>");
+            html.Append("<td>").Append(RenderStateBadge(item.State)).Append("</td>")
                 .Append("<td>").Append(E(item.MethodName)).Append("</td>")
                 .Append("<td>").Append(E(item.CreatedAt.ToString("u"))).Append("</td>");
 
@@ -129,19 +214,90 @@ internal static class JobSearchDashboardRenderer
                 html.Append("<td>").Append(E(value)).Append("</td>");
             }
 
-            html.Append("<td><a href=\"")
+            html.Append("<td>");
+            if (hasJoin)
+            {
+                var label = string.IsNullOrEmpty(item.ChildrenLabel) ? "children" : item.ChildrenLabel;
+                var countClass = hasChildren ? "hfjs-child-count" : "hfjs-child-count hfjs-child-count-empty";
+                var lookupTitle = item.ChildrenLookupField is null
+                    ? string.Empty
+                    : string.IsNullOrEmpty(item.ChildrenLookupValue)
+                        ? $"Join field '{item.ChildrenLookupField}' is empty on this job"
+                        : $"Searched by {item.ChildrenLookupField}={item.ChildrenLookupValue}";
+
+                html.Append("<span class=\"").Append(countClass).Append("\"");
+                if (!string.IsNullOrEmpty(lookupTitle))
+                {
+                    html.Append(" title=\"").Append(E(lookupTitle)).Append("\"");
+                }
+                html.Append(">")
+                    .Append(item.Children!.Count)
+                    .Append(' ')
+                    .Append(E(label))
+                    .Append("</span>");
+            }
+            html.Append("<a href=\"")
                 .Append(E($"{NormalizePathBase(model.PathBase)}/jobs/details/{item.JobId}"))
                 .Append("\">View</a></td></tr>");
+
+            if (hasChildren)
+            {
+                RenderChildRows(html, model, item, columnCount);
+            }
         }
 
         if (!model.Result.Items.Any())
         {
             html.Append("<tr><td colspan=\"")
-                .Append(5 + model.DisplayFields.Count)
+                .Append(columnCount)
                 .Append("\">No jobs found.</td></tr>");
         }
 
         html.Append("</tbody></table></div>");
+    }
+
+    private static void RenderChildRows(
+        StringBuilder html,
+        JobSearchDashboardViewModel model,
+        JobSearchResult parent,
+        int columnCount)
+    {
+        var parentId = E(parent.JobId);
+        var basePath = NormalizePathBase(model.PathBase);
+
+        foreach (var child in parent.Children!)
+        {
+            html.Append("<tr class=\"hfjs-child-row\" data-parent=\"")
+                .Append(parentId)
+                .Append("\" style=\"display:none;\"><td colspan=\"")
+                .Append(columnCount)
+                .Append("\">");
+
+            html.Append("<span class=\"hfjs-child-arrow\">&#8627;</span>");
+            html.Append("<code class=\"hfjs-child-id\">").Append(E(child.JobId)).Append("</code>");
+            html.Append(RenderStateBadge(child.State));
+            html.Append("<span class=\"hfjs-child-method\">").Append(E(child.MethodName)).Append("</span>");
+            html.Append("<span class=\"hfjs-child-time\">").Append(E(child.CreatedAt.ToString("u"))).Append("</span>");
+
+            foreach (var pair in child.Fields)
+            {
+                if (string.IsNullOrEmpty(pair.Value))
+                {
+                    continue;
+                }
+
+                html.Append("<span class=\"hfjs-child-field\"><b>")
+                    .Append(E(pair.Key))
+                    .Append(":</b> ")
+                    .Append(E(pair.Value))
+                    .Append("</span>");
+            }
+
+            html.Append("<a class=\"hfjs-child-view\" href=\"")
+                .Append(E($"{basePath}/jobs/details/{child.JobId}"))
+                .Append("\">View</a>");
+            html.Append("</td></tr>");
+        }
     }
 
     private static void RenderPager(StringBuilder html, JobSearchDashboardViewModel model)
@@ -303,9 +459,24 @@ internal static class JobSearchDashboardRenderer
 
     private static void RenderAutoRefreshScript(StringBuilder html)
     {
-        html.Append("<script>");
-        html.Append("setTimeout(function(){window.location.reload();},5000);");
-        html.Append("</script>");
+        html.Append("<script>(function(){try{");
+        html.Append("var KEY='hfjs.autoRefresh';");
+        html.Append("var btn=document.getElementById('hfjs-toggle');");
+        html.Append("var statusEl=document.getElementById('hfjs-status');");
+        html.Append("if(!btn||!statusEl)return;");
+        html.Append("var enabled;try{enabled=localStorage.getItem(KEY)!=='false';}catch(e){enabled=true;}");
+        html.Append("var timer=null;");
+        html.Append("function apply(){");
+        html.Append("if(timer){clearTimeout(timer);timer=null;}");
+        html.Append("if(enabled){btn.textContent='Pause';statusEl.textContent='every 5s';");
+        html.Append("timer=setTimeout(function(){window.location.reload();},5000);");
+        html.Append("}else{btn.textContent='Resume';statusEl.textContent='paused';}");
+        html.Append("}");
+        html.Append("btn.addEventListener('click',function(){enabled=!enabled;");
+        html.Append("try{localStorage.setItem(KEY,enabled?'true':'false');}catch(e){}");
+        html.Append("apply();});");
+        html.Append("apply();");
+        html.Append("}catch(e){}})();</script>");
     }
 
     private static IReadOnlyList<int> GetPageWindow(int currentPage, int totalPages)
@@ -329,6 +500,33 @@ internal static class JobSearchDashboardRenderer
     private static string E(string? value)
     {
         return WebUtility.HtmlEncode(value ?? string.Empty) ?? string.Empty;
+    }
+
+    private static string RenderStateBadge(string? state)
+    {
+        var safe = E(state);
+        var cls = StateCssClass(state);
+        return $"<span class=\"hfjs-state {cls}\">{safe}</span>";
+    }
+
+    private static string StateCssClass(string? state)
+    {
+        if (string.IsNullOrEmpty(state))
+        {
+            return "hfjs-state-unknown";
+        }
+
+        switch (state!.ToLowerInvariant())
+        {
+            case "processing": return "hfjs-state-processing";
+            case "enqueued": return "hfjs-state-enqueued";
+            case "succeeded": return "hfjs-state-succeeded";
+            case "failed": return "hfjs-state-failed";
+            case "scheduled": return "hfjs-state-scheduled";
+            case "deleted": return "hfjs-state-deleted";
+            case "awaiting": return "hfjs-state-awaiting";
+            default: return "hfjs-state-unknown";
+        }
     }
 
     private static string NormalizePathBase(string? value)

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Hangfire.Dashboard;
 using Hangfire.Dashboard.Pages;
 
@@ -6,6 +8,8 @@ namespace Hangfire.Dashboard.JobSearch;
 
 internal sealed class JobSearchDashboardPage : RazorPage
 {
+    private const int MaxChildrenPerJoin = 1000;
+
     private readonly IServiceProvider _serviceProvider;
 
     public JobSearchDashboardPage(IServiceProvider serviceProvider)
@@ -40,6 +44,8 @@ internal sealed class JobSearchDashboardPage : RazorPage
         var stateCounts = storage.CountByStateAsync(query).GetAwaiter().GetResult();
         var dashboardBasePath = GetDashboardBasePath();
 
+        AttachChildren(storage, options, result);
+
         var model = JobSearchDashboardViewModel.From(
             pathBase: dashboardBasePath,
             query: query,
@@ -49,6 +55,87 @@ internal sealed class JobSearchDashboardPage : RazorPage
             stateCounts: stateCounts);
 
         WriteLiteral(JobSearchDashboardRenderer.RenderBody(model));
+    }
+
+    private static void AttachChildren(
+        IJobSearchStorage storage,
+        JobSearchOptions options,
+        JobSearchResultPage result)
+    {
+        if (options.Joins.Count == 0 || result.Items.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var join in options.Joins)
+        {
+            var parentItems = result.Items
+                .Where(item => join.MatchesParent(item.JobType, item.MethodName))
+                .ToList();
+
+            if (parentItems.Count == 0)
+            {
+                continue;
+            }
+
+            // Resolve every parent's lookup value up-front (uses ParentValueResolver if set).
+            var resolvedKeys = parentItems
+                .Select(item => new { Parent = item, Key = join.ResolveParentValue(item) })
+                .ToList();
+
+            var distinctKeys = resolvedKeys
+                .Select(x => x.Key)
+                .Where(v => !string.IsNullOrEmpty(v))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            var childrenByKey = new Dictionary<string, List<JobSearchResult>>(StringComparer.Ordinal);
+            foreach (var key in distinctKeys)
+            {
+                if (key is null)
+                {
+                    continue;
+                }
+
+                var childQuery = new JobSearchQuery
+                {
+                    JobType = join.ChildJobTypeName,
+                    Page = 1,
+                    PageSize = MaxChildrenPerJoin,
+                    Filters = new Dictionary<string, string> { [join.KeyField] = key },
+                };
+
+                var childPage = storage.SearchAsync(childQuery).GetAwaiter().GetResult();
+                if (childPage.Items.Count > 0)
+                {
+                    childrenByKey[key] = childPage.Items
+                        .Where(c => string.Equals(c.MethodName, join.ChildMethodName, StringComparison.Ordinal))
+                        .ToList();
+                }
+            }
+
+            foreach (var entry in resolvedKeys)
+            {
+                var parent = entry.Parent;
+                var parentKey = entry.Key;
+
+                // Initialize as empty list so the renderer can show "0 children" — proof that the join was attempted.
+                if (parent.Children is null)
+                {
+                    parent.Children = new List<JobSearchResult>();
+                    parent.ChildrenLabel = join.ChildLabel;
+                    parent.ChildrenLookupField = join.KeyField;
+                    parent.ChildrenLookupValue = parentKey;
+                }
+
+                if (!string.IsNullOrEmpty(parentKey)
+                    && childrenByKey.TryGetValue(parentKey!, out var children)
+                    && children.Count > 0)
+                {
+                    parent.Children = parent.Children.Concat(children).ToList();
+                }
+            }
+        }
     }
 
     private string GetDashboardBasePath()
