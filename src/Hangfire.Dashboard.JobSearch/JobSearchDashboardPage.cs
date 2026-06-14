@@ -40,9 +40,14 @@ internal sealed class JobSearchDashboardPage : RazorPage
             Query("definition"));
 
         var query = JobSearchDashboardQueryMapper.Map(Query, selectedDefinition);
-        var result = storage.SearchAsync(query).GetAwaiter().GetResult();
-        var stateCounts = storage.CountByStateAsync(query).GetAwaiter().GetResult();
         var dashboardBasePath = GetDashboardBasePath();
+
+        var searchTask = storage.SearchAsync(query);
+        var countTask = storage.CountByStateAsync(query);
+        System.Threading.Tasks.Task.WhenAll(searchTask, countTask).GetAwaiter().GetResult();
+
+        var result = searchTask.Result;
+        var stateCounts = countTask.Result;
 
         AttachChildren(storage, options, result);
 
@@ -63,10 +68,22 @@ internal sealed class JobSearchDashboardPage : RazorPage
         JobSearchResultPage result)
     {
         if (options.Joins.Count == 0 || result.Items.Count == 0)
+            return;
+
+        if (storage is RedisJobSearchStorage redisStorage)
         {
+            AttachChildrenBulk(redisStorage, options, result);
             return;
         }
 
+        AttachChildrenSequential(storage, options, result);
+    }
+
+    private static void AttachChildrenBulk(
+        RedisJobSearchStorage storage,
+        JobSearchOptions options,
+        JobSearchResultPage result)
+    {
         foreach (var join in options.Joins)
         {
             var parentItems = result.Items
@@ -74,11 +91,63 @@ internal sealed class JobSearchDashboardPage : RazorPage
                 .ToList();
 
             if (parentItems.Count == 0)
-            {
                 continue;
-            }
 
-            // Resolve every parent's lookup value up-front (uses ParentValueResolver if set).
+            var resolvedKeys = parentItems
+                .Select(item => new { Parent = item, Key = join.ResolveParentValue(item) })
+                .ToList();
+
+            var distinctKeys = resolvedKeys
+                .Select(x => x.Key)
+                .Where(v => !string.IsNullOrEmpty(v))
+                .Distinct(StringComparer.Ordinal)
+                .Select(v => v!)
+                .ToList();
+
+            var childrenByKey = storage.SearchChildrenBulkAsync(
+                join.ChildJobTypeName,
+                join.ChildMethodName,
+                join.KeyField,
+                distinctKeys,
+                MaxChildrenPerJoin).GetAwaiter().GetResult();
+
+            foreach (var entry in resolvedKeys)
+            {
+                var parent = entry.Parent;
+                var parentKey = entry.Key;
+
+                if (parent.Children is null)
+                {
+                    parent.Children = new List<JobSearchResult>();
+                    parent.ChildrenLabel = join.ChildLabel;
+                    parent.ChildrenLookupField = join.KeyField;
+                    parent.ChildrenLookupValue = parentKey;
+                }
+
+                if (!string.IsNullOrEmpty(parentKey)
+                    && childrenByKey.TryGetValue(parentKey!, out var children)
+                    && children.Count > 0)
+                {
+                    parent.Children = parent.Children.Concat(children).ToList();
+                }
+            }
+        }
+    }
+
+    private static void AttachChildrenSequential(
+        IJobSearchStorage storage,
+        JobSearchOptions options,
+        JobSearchResultPage result)
+    {
+        foreach (var join in options.Joins)
+        {
+            var parentItems = result.Items
+                .Where(item => join.MatchesParent(item.JobType, item.MethodName))
+                .ToList();
+
+            if (parentItems.Count == 0)
+                continue;
+
             var resolvedKeys = parentItems
                 .Select(item => new { Parent = item, Key = join.ResolveParentValue(item) })
                 .ToList();
@@ -93,9 +162,7 @@ internal sealed class JobSearchDashboardPage : RazorPage
             foreach (var key in distinctKeys)
             {
                 if (key is null)
-                {
                     continue;
-                }
 
                 var childQuery = new JobSearchQuery
                 {
@@ -119,7 +186,6 @@ internal sealed class JobSearchDashboardPage : RazorPage
                 var parent = entry.Parent;
                 var parentKey = entry.Key;
 
-                // Initialize as empty list so the renderer can show "0 children" — proof that the join was attempted.
                 if (parent.Children is null)
                 {
                     parent.Children = new List<JobSearchResult>();
