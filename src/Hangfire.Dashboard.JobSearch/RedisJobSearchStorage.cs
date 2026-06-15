@@ -47,6 +47,7 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
     private string V2StateIdx(string state) => $"{_prefix}:v2:idx:state:{state.ToLowerInvariant()}";
     private string V2TypeIdx(string type) => $"{_prefix}:v2:idx:type:{type.ToLowerInvariant()}";
     private string V2FieldIdx(string field, string value) => $"{_prefix}:v2:idx:f:{field.ToLowerInvariant()}:{value.ToLowerInvariant()}";
+    private string V2RevIdx(string jobId) => $"{_prefix}:v2:rev:{jobId}";
     private string V2StateIdxPrefix => $"{_prefix}:v2:idx:state:";
     private string V2TmpKey() => $"{_prefix}:v2:tmp:{Guid.NewGuid():N}";
 
@@ -71,6 +72,17 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         foreach (var field in metadata.Fields)
             hash.Add(new HashEntry($"f:{field.Key}", field.Value ?? string.Empty));
 
+        var indexKeys = new List<RedisValue>
+        {
+            (RedisValue)V2GlobalIdx,
+            (RedisValue)V2StateIdx(metadata.State),
+            (RedisValue)V2TypeIdx(metadata.JobType),
+        };
+        foreach (var field in metadata.Fields)
+            if (!string.IsNullOrEmpty(field.Value))
+                indexKeys.Add((RedisValue)V2FieldIdx(field.Key, field.Value!));
+
+        var revKey = V2RevIdx(jobId);
         var batch = db.CreateBatch();
         var tasks = new List<Task>();
 
@@ -78,13 +90,18 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         tasks.Add(batch.SortedSetAddAsync(V2GlobalIdx, jobId, score));
         tasks.Add(batch.SortedSetAddAsync(V2StateIdx(metadata.State), jobId, score));
         tasks.Add(batch.SortedSetAddAsync(V2TypeIdx(metadata.JobType), jobId, score));
+        tasks.Add(batch.SetAddAsync(revKey, indexKeys.ToArray()));
 
         foreach (var field in metadata.Fields)
             if (!string.IsNullOrEmpty(field.Value))
                 tasks.Add(batch.SortedSetAddAsync(V2FieldIdx(field.Key, field.Value!), jobId, score));
 
         if (_expiry.HasValue)
+        {
             tasks.Add(batch.KeyExpireAsync(metaKey, _expiry));
+            // Reverse index outlives the hash by 1 day to allow cleanup of already-expired entries
+            tasks.Add(batch.KeyExpireAsync(revKey, _expiry.Value.Add(TimeSpan.FromDays(1))));
+        }
 
         batch.Execute();
         await Task.WhenAll(tasks);
@@ -113,27 +130,43 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
 
         var db = Db;
         var metaKey = V2MetaKey(jobId);
+        var revKey = V2RevIdx(jobId);
 
         var hash = await db.HashGetAllAsync(metaKey);
         if (hash.Length == 0)
+        {
+            // Hash already expired — use reverse index to clean up any remaining ZSET memberships
+            var revMembers = await db.SetMembersAsync(revKey);
+            if (revMembers.Length > 0)
+            {
+                var batch = db.CreateBatch();
+                var tasks = new List<Task>();
+                foreach (var k in revMembers)
+                    tasks.Add(batch.SortedSetRemoveAsync((RedisKey)(string)k!, jobId));
+                tasks.Add(batch.KeyDeleteAsync(revKey));
+                batch.Execute();
+                await Task.WhenAll(tasks);
+            }
             return;
+        }
 
         var meta = Deserialize(hash);
 
-        var batch = db.CreateBatch();
-        var tasks = new List<Task>();
+        var batch2 = db.CreateBatch();
+        var tasks2 = new List<Task>();
 
-        tasks.Add(batch.KeyDeleteAsync(metaKey));
-        tasks.Add(batch.SortedSetRemoveAsync(V2GlobalIdx, jobId));
-        tasks.Add(batch.SortedSetRemoveAsync(V2StateIdx(meta.State), jobId));
-        tasks.Add(batch.SortedSetRemoveAsync(V2TypeIdx(meta.JobType), jobId));
+        tasks2.Add(batch2.KeyDeleteAsync(metaKey));
+        tasks2.Add(batch2.KeyDeleteAsync(revKey));
+        tasks2.Add(batch2.SortedSetRemoveAsync(V2GlobalIdx, jobId));
+        tasks2.Add(batch2.SortedSetRemoveAsync(V2StateIdx(meta.State), jobId));
+        tasks2.Add(batch2.SortedSetRemoveAsync(V2TypeIdx(meta.JobType), jobId));
 
         foreach (var field in meta.Fields)
             if (!string.IsNullOrEmpty(field.Value))
-                tasks.Add(batch.SortedSetRemoveAsync(V2FieldIdx(field.Key, field.Value!), jobId));
+                tasks2.Add(batch2.SortedSetRemoveAsync(V2FieldIdx(field.Key, field.Value!), jobId));
 
-        batch.Execute();
-        await Task.WhenAll(tasks);
+        batch2.Execute();
+        await Task.WhenAll(tasks2);
     }
 
     public async Task<JobSearchResultPage> SearchAsync(JobSearchQuery query, CancellationToken cancellationToken = default)
@@ -177,9 +210,10 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
 
             if (IsCreatedAtSort(query))
             {
+                var order = GetSortDirection(query);
                 var start = (long)(page - 1) * pageSize;
                 var stop = (long)page * pageSize - 1;
-                var jobIds = await db.SortedSetRangeByRankAsync(workingKey, start, stop, Order.Descending);
+                var jobIds = await db.SortedSetRangeByRankAsync(workingKey, start, stop, order);
                 var items = await LoadPageItemsAsync(db, jobIds, workingKey);
                 return new JobSearchResultPage { Items = items, TotalCount = total, Page = page, PageSize = pageSize };
             }
@@ -427,16 +461,35 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         return results;
     }
 
-    private static async Task PruneStaleAsync(IDatabase db, IReadOnlyList<string> staleIds, RedisKey sourceKey)
+    private async Task PruneStaleAsync(IDatabase db, IReadOnlyList<string> staleIds, RedisKey sourceKey)
     {
         try
         {
-            var batch = db.CreateBatch();
-            var tasks = new List<Task>();
-            foreach (var id in staleIds)
-                tasks.Add(batch.SortedSetRemoveAsync(sourceKey, id));
-            batch.Execute();
-            await Task.WhenAll(tasks);
+            // Batch-read reverse index sets for all stale IDs
+            var revBatch = db.CreateBatch();
+            var revTasks = staleIds.Select(id => (id, revBatch.SetMembersAsync(V2RevIdx(id)))).ToList();
+            revBatch.Execute();
+
+            var removeBatch = db.CreateBatch();
+            var removeTasks = new List<Task>();
+            foreach (var (id, revTask) in revTasks)
+            {
+                var members = await revTask;
+                if (members.Length > 0)
+                {
+                    // Full cleanup: remove from every ZSET the job was indexed into
+                    foreach (var k in members)
+                        removeTasks.Add(removeBatch.SortedSetRemoveAsync((RedisKey)(string)k!, id));
+                    removeTasks.Add(removeBatch.KeyDeleteAsync(V2RevIdx(id)));
+                }
+                else
+                {
+                    // Reverse index also expired — best effort: remove from the searched key only
+                    removeTasks.Add(removeBatch.SortedSetRemoveAsync(sourceKey, id));
+                }
+            }
+            removeBatch.Execute();
+            await Task.WhenAll(removeTasks);
         }
         catch
         {
@@ -471,6 +524,15 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         if (query.SortBy != null)
             return string.Equals(query.SortBy, "createdAt", StringComparison.OrdinalIgnoreCase);
         return true;
+    }
+
+    private static Order GetSortDirection(JobSearchQuery query)
+    {
+        if (query.Sorts.Count == 1)
+            return query.Sorts[0].Descending ? Order.Descending : Order.Ascending;
+        if (query.SortBy != null)
+            return query.SortDescending ? Order.Descending : Order.Ascending;
+        return Order.Descending;
     }
 
     private static JobSearchResultPage EmptyPage(int page, int pageSize) =>
