@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/examples/">
+    <Project Path="examples/Hangfire.Dashboard.JobSearch.Example/Hangfire.Dashboard.JobSearch.Example.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Hangfire.Dashboard.JobSearch/Hangfire.Dashboard.JobSearch.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Hangfire.Dashboard.JobSearch.Tests/Hangfire.Dashboard.JobSearch.Tests.csproj" />
+  </Folder>
+</Solution>

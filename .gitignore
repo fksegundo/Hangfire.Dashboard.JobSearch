@@ -1,0 +1,35 @@
+# Build output & packages
+bin/
+obj/
+dist/
+TestResults/
+coverage/
+*.trx
+*.coverage
+*.coveragexml
+
+# Local SDK/package caches used during development
+.dotnet/
+.nuget/
+
+# IDE/editor files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and local environment files
+*.log
+.env
+.env.*
+
+# Local-only repository notes/specs
+AGENTS.md
+
