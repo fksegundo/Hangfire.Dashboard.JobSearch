@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: write # Required for GitHub Packages
       id-token: write # Required for NuGet Trusted Publishing (OIDC)
 
     steps:
@@ -46,6 +47,13 @@ jobs:
       with:
         name: nuget-package
         path: dist/*
+
+    - name: Publish to GitHub Packages
+      if: (startsWith(github.ref, 'refs/tags/v') || inputs.publish_to_nuget == true)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        dotnet nuget push dist/*.nupkg --api-key "$GITHUB_TOKEN" --source "https://nuget.pkg.github.com/fksegundo/index.json" --skip-duplicate
 
     - name: NuGet login (Trusted Publishing OIDC)
       if: (startsWith(github.ref, 'refs/tags/v') || inputs.publish_to_nuget == true)
