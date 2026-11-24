@@ -45,6 +45,11 @@ internal static class JobSearchDashboardQueryMapper
             }
         }
 
+        var rawState = EmptyToNull(queryValueProvider("state"));
+        var state = string.Equals(rawState, "all", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : (rawState ?? "Processing");
+
         return new JobSearchQuery
         {
             JobId = EmptyToNull(queryValueProvider("jobId")),
@@ -56,7 +61,7 @@ internal static class JobSearchDashboardQueryMapper
                 : selectedDefinition.MethodName,
             CreatedFrom = ParseDateTimeOffset(queryValueProvider("from")),
             CreatedTo = ParseDateTimeOffset(queryValueProvider("to")),
-            State = EmptyToNull(queryValueProvider("state")) ?? "Processing",
+            State = state,
             SortBy = EmptyToNull(queryValueProvider("sortBy")),
             SortDescending = ParseBool(queryValueProvider("desc")),
             Sorts = ParseSorts(queryValueProvider("sort")),

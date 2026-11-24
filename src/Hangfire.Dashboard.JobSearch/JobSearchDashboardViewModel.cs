@@ -16,9 +16,14 @@ internal sealed class JobSearchDashboardViewModel
     {
         public string Value { get; set; } = string.Empty;
         public string Label { get; set; } = string.Empty;
+        public int Count { get; set; }
     }
 
     public string PathBase { get; set; } = string.Empty;
+    public string RoutePath { get; set; } = "/job-search";
+    public string MenuTitle { get; set; } = "Job Search";
+    public int AutoRefreshIntervalSeconds { get; set; } = 5;
+    public bool IsReadOnly { get; set; }
     public JobSearchQuery Query { get; set; } = new JobSearchQuery();
     public JobSearchResultPage Result { get; set; } = new JobSearchResultPage();
     public string SelectedDefinitionKey { get; set; } = string.Empty;
@@ -35,7 +40,8 @@ internal sealed class JobSearchDashboardViewModel
         JobSearchOptions options,
         JobSearchResultPage result,
         JobSearchDefinition? selectedDefinition,
-        IReadOnlyDictionary<string, int> stateCounts)
+        IReadOnlyDictionary<string, int> stateCounts,
+        bool isReadOnly = false)
     {
         var fields = (selectedDefinition?.Fields ?? new List<JobSearchField>()).ToList();
         var types = options.Definitions
@@ -54,6 +60,10 @@ internal sealed class JobSearchDashboardViewModel
         return new JobSearchDashboardViewModel
         {
             PathBase = pathBase ?? string.Empty,
+            RoutePath = GlobalConfigurationExtensions.NormalizeRoutePath(options.RoutePath),
+            MenuTitle = string.IsNullOrWhiteSpace(options.MenuTitle) ? "Job Search" : options.MenuTitle,
+            AutoRefreshIntervalSeconds = options.AutoRefreshIntervalSeconds,
+            IsReadOnly = isReadOnly,
             Query = query,
             Result = result,
             SelectedDefinitionKey = selectedDefinition is null
@@ -86,13 +96,22 @@ internal sealed class JobSearchDashboardViewModel
         var order = new[] { "Processing", "Enqueued", "Succeeded", "Failed", "Scheduled", "Awaiting", "Deleted" };
         var options = new List<StateOption>();
 
+        var total = stateCounts.Values.Sum();
+        options.Add(new StateOption
+        {
+            Value = "all",
+            Label = $"All ({total})",
+            Count = total
+        });
+
         foreach (var state in order)
         {
             stateCounts.TryGetValue(state, out var count);
             options.Add(new StateOption
             {
                 Value = state,
-                Label = $"{state} ({count})"
+                Label = $"{state} ({count})",
+                Count = count
             });
         }
 
