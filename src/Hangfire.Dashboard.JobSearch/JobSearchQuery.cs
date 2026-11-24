@@ -10,6 +10,8 @@ public sealed class JobSearchQuery
 
     public string? JobType { get; set; }
 
+    public string? MethodName { get; set; }
+
     public Dictionary<string, string> Filters { get; set; } = new Dictionary<string, string>();
 
     public string? SortBy { get; set; }

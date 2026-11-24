@@ -124,6 +124,7 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         {
             JobId = query.JobId,
             JobType = query.JobType,
+            MethodName = query.MethodName,
             State = null,
             Filters = new Dictionary<string, string>(query.Filters, StringComparer.Ordinal)
         };
@@ -146,13 +147,19 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         }
 
         if (!string.IsNullOrWhiteSpace(query.State)
-            && !string.Equals(result.State, query.State, StringComparison.Ordinal))
+            && !string.Equals(result.State, query.State, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
         if (!string.IsNullOrWhiteSpace(query.JobType)
-            && !string.Equals(result.JobType, query.JobType, StringComparison.Ordinal))
+            && !string.Equals(result.JobType, query.JobType, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.MethodName)
+            && !string.Equals(result.MethodName, query.MethodName, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -160,7 +167,7 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         foreach (var filter in query.Filters.Where(filter => !string.IsNullOrWhiteSpace(filter.Value)))
         {
             if (!result.Fields.TryGetValue(filter.Key, out var value)
-                || !string.Equals(value, filter.Value, StringComparison.Ordinal))
+                || !string.Equals(value, filter.Value, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -207,35 +214,35 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         return results.OrderByDescending(result => result.CreatedAt).ThenBy(result => result.JobId, StringComparer.Ordinal);
     }
 
-    private static SortValue GetSortValue(JobSearchResult result, string fieldName)
+    private static JobSearchSortValue GetSortValue(JobSearchResult result, string fieldName)
     {
         if (string.Equals(fieldName, "JobId", StringComparison.Ordinal))
         {
-            return SortValue.From(result.JobId);
+            return JobSearchSortValue.From(result.JobId);
         }
 
         if (string.Equals(fieldName, "State", StringComparison.Ordinal))
         {
-            return SortValue.From(result.State);
+            return JobSearchSortValue.From(result.State);
         }
 
         if (string.Equals(fieldName, "JobType", StringComparison.Ordinal))
         {
-            return SortValue.From(result.JobType);
+            return JobSearchSortValue.From(result.JobType);
         }
 
         if (string.Equals(fieldName, "MethodName", StringComparison.Ordinal))
         {
-            return SortValue.From(result.MethodName);
+            return JobSearchSortValue.From(result.MethodName);
         }
 
         if (string.Equals(fieldName, "CreatedAt", StringComparison.Ordinal))
         {
-            return SortValue.From(result.CreatedAt.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture));
+            return JobSearchSortValue.From(result.CreatedAt.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture));
         }
 
         result.Fields.TryGetValue(fieldName, out var value);
-        return SortValue.From(value);
+        return JobSearchSortValue.From(value);
     }
 
     private static JobSearchResult ToResult(JobSearchMetadata metadata)
@@ -262,43 +269,5 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
             CreatedAt = metadata.CreatedAt,
             Fields = new Dictionary<string, string?>(metadata.Fields, StringComparer.Ordinal)
         };
-    }
-
-    private readonly struct SortValue : IComparable<SortValue>
-    {
-        private readonly decimal _number;
-        private readonly string _text;
-
-        private SortValue(bool hasNumber, decimal number, string text)
-        {
-            HasNumber = hasNumber;
-            _number = number;
-            _text = text;
-        }
-
-        public bool HasNumber { get; }
-
-        public static SortValue From(string? value)
-        {
-            if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
-            {
-                return new SortValue(true, number, string.Empty);
-            }
-
-            return new SortValue(false, 0, value ?? string.Empty);
-        }
-
-        public int CompareTo(SortValue other)
-        {
-            var numberComparison = HasNumber.CompareTo(other.HasNumber);
-            if (numberComparison != 0)
-            {
-                return numberComparison;
-            }
-
-            return HasNumber
-                ? _number.CompareTo(other._number)
-                : string.Compare(_text, other._text, StringComparison.Ordinal);
-        }
     }
 }

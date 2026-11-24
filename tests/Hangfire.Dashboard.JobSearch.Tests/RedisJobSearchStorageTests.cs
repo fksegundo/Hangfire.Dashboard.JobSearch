@@ -289,4 +289,47 @@ public sealed class RedisJobSearchStorageTests : IAsyncLifetime
         Assert.Equal("sw3", page.Items[1].JobId); // bravo
         Assert.Equal("sw1", page.Items[2].JobId); // charlie
     }
+
+    [Fact]
+    public async Task Search_ByMethodName_ReturnsOnlyMatchingMethod()
+    {
+        var storage = new RedisJobSearchStorage(_connection, "hangfire:jobsearch:method", expiry: TimeSpan.FromMinutes(5));
+        await storage.SaveMetadataAsync("m1", Meta("m1", jobType: "SharedWorker", methodName: "CreateAsync"));
+        await storage.SaveMetadataAsync("m2", Meta("m2", jobType: "SharedWorker", methodName: "CancelAsync"));
+
+        var page = await storage.SearchAsync(new JobSearchQuery { JobType = "SharedWorker", MethodName = "CreateAsync" });
+        var item = Assert.Single(page.Items);
+        Assert.Equal("m1", item.JobId);
+
+        var counts = await storage.CountByStateAsync(new JobSearchQuery { JobType = "SharedWorker", MethodName = "CreateAsync" });
+        Assert.Equal(1, counts["Enqueued"]);
+    }
+
+    [Fact]
+    public async Task Search_NumericSort_OrdersNumerically()
+    {
+        var storage = new RedisJobSearchStorage(_connection, "hangfire:jobsearch:num", expiry: TimeSpan.FromMinutes(5));
+        await storage.SaveMetadataAsync("n1", Meta("n1", fields: F(("Amount", "100"))));
+        await storage.SaveMetadataAsync("n2", Meta("n2", fields: F(("Amount", "7"))));
+        await storage.SaveMetadataAsync("n3", Meta("n3", fields: F(("Amount", "42"))));
+
+        var page = await storage.SearchAsync(new JobSearchQuery { SortBy = "Amount", SortDescending = false });
+
+        Assert.Equal(new[] { "n2", "n3", "n1" }, page.Items.Select(x => x.JobId));
+    }
+
+    [Fact]
+    public async Task UpdateState_UpdatesReverseIndexForCleanExpiration()
+    {
+        var prefix = "hangfire:jobsearch:rev";
+        var storage = new RedisJobSearchStorage(_connection, prefix, expiry: TimeSpan.FromMinutes(5));
+        await storage.SaveMetadataAsync("r1", Meta("r1", state: "Enqueued"));
+        await storage.UpdateStateAsync("r1", "Succeeded");
+
+        var db = _connection.GetDatabase();
+        var revMembers = (await db.SetMembersAsync($"{prefix}:v2:rev:r1")).Select(v => (string)v!).ToHashSet();
+
+        Assert.DoesNotContain($"{prefix}:v2:idx:state:enqueued", revMembers);
+        Assert.Contains($"{prefix}:v2:idx:state:succeeded", revMembers);
+    }
 }

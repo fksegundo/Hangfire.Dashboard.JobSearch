@@ -51,6 +51,9 @@ internal static class JobSearchDashboardQueryMapper
             JobType = selectedDefinition is null
                 ? EmptyToNull(queryValueProvider("jobType"))
                 : (selectedDefinition.JobType.FullName ?? selectedDefinition.JobType.Name),
+            MethodName = selectedDefinition is null
+                ? EmptyToNull(queryValueProvider("methodName"))
+                : selectedDefinition.MethodName,
             State = EmptyToNull(queryValueProvider("state")) ?? "Processing",
             SortBy = EmptyToNull(queryValueProvider("sortBy")),
             SortDescending = ParseBool(queryValueProvider("desc")),

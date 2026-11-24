@@ -17,14 +17,19 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
     private static readonly string[] KnownHangfireStates =
         new[] { "Enqueued", "Processing", "Succeeded", "Failed", "Deleted", "Scheduled", "Awaiting" };
 
-    // KEYS[1]=metaHash  KEYS[2]=newStateIdx
+    // KEYS[1]=metaHash  KEYS[2]=newStateIdx  KEYS[3]=revIdx
     // ARGV[1]=jobId  ARGV[2]=newState  ARGV[3]=stateIdxPrefix
     private static readonly string MoveStateScript =
         "if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end\n" +
         "local old = redis.call('HGET', KEYS[1], 'state')\n" +
         "local score = tonumber(redis.call('HGET', KEYS[1], 'createdAt')) or 0\n" +
-        "if old then redis.call('ZREM', ARGV[3] .. string.lower(tostring(old)), ARGV[1]) end\n" +
+        "if old then\n" +
+        "  local oldKey = ARGV[3] .. string.lower(tostring(old))\n" +
+        "  redis.call('ZREM', oldKey, ARGV[1])\n" +
+        "  redis.call('SREM', KEYS[3], oldKey)\n" +
+        "end\n" +
         "redis.call('ZADD', KEYS[2], score, ARGV[1])\n" +
+        "redis.call('SADD', KEYS[3], KEYS[2])\n" +
         "redis.call('HSET', KEYS[1], 'state', ARGV[2])\n" +
         "return 1";
 
@@ -46,6 +51,7 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
     private string V2GlobalIdx => $"{_prefix}:v2:idx";
     private string V2StateIdx(string state) => $"{_prefix}:v2:idx:state:{state.ToLowerInvariant()}";
     private string V2TypeIdx(string type) => $"{_prefix}:v2:idx:type:{type.ToLowerInvariant()}";
+    private string V2MethodIdx(string method) => $"{_prefix}:v2:idx:method:{method.ToLowerInvariant()}";
     private string V2FieldIdx(string field, string value) => $"{_prefix}:v2:idx:f:{field.ToLowerInvariant()}:{value.ToLowerInvariant()}";
     private string V2RevIdx(string jobId) => $"{_prefix}:v2:rev:{jobId}";
     private string V2StateIdxPrefix => $"{_prefix}:v2:idx:state:";
@@ -78,6 +84,8 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
             (RedisValue)V2StateIdx(metadata.State),
             (RedisValue)V2TypeIdx(metadata.JobType),
         };
+        if (!string.IsNullOrEmpty(metadata.MethodName))
+            indexKeys.Add((RedisValue)V2MethodIdx(metadata.MethodName));
         foreach (var field in metadata.Fields)
             if (!string.IsNullOrEmpty(field.Value))
                 indexKeys.Add((RedisValue)V2FieldIdx(field.Key, field.Value!));
@@ -90,6 +98,8 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         tasks.Add(batch.SortedSetAddAsync(V2GlobalIdx, jobId, score));
         tasks.Add(batch.SortedSetAddAsync(V2StateIdx(metadata.State), jobId, score));
         tasks.Add(batch.SortedSetAddAsync(V2TypeIdx(metadata.JobType), jobId, score));
+        if (!string.IsNullOrEmpty(metadata.MethodName))
+            tasks.Add(batch.SortedSetAddAsync(V2MethodIdx(metadata.MethodName), jobId, score));
         tasks.Add(batch.SetAddAsync(revKey, indexKeys.ToArray()));
 
         foreach (var field in metadata.Fields)
@@ -114,14 +124,21 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
 
         var db = Db;
         var metaKey = V2MetaKey(jobId);
+        var revKey = V2RevIdx(jobId);
 
         await db.ScriptEvaluateAsync(
             MoveStateScript,
-            keys: new RedisKey[] { metaKey, V2StateIdx(state) },
+            keys: new RedisKey[] { metaKey, V2StateIdx(state), revKey },
             values: new RedisValue[] { jobId, state, V2StateIdxPrefix });
 
         if (_expiry.HasValue)
-            await db.KeyExpireAsync(metaKey, _expiry);
+        {
+            var batch = db.CreateBatch();
+            var t1 = batch.KeyExpireAsync(metaKey, _expiry);
+            var t2 = batch.KeyExpireAsync(revKey, _expiry.Value.Add(TimeSpan.FromDays(1)));
+            batch.Execute();
+            await Task.WhenAll(t1, t2);
+        }
     }
 
     public async Task DeleteMetadataAsync(string jobId, CancellationToken cancellationToken = default)
@@ -160,6 +177,8 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         tasks2.Add(batch2.SortedSetRemoveAsync(V2GlobalIdx, jobId));
         tasks2.Add(batch2.SortedSetRemoveAsync(V2StateIdx(meta.State), jobId));
         tasks2.Add(batch2.SortedSetRemoveAsync(V2TypeIdx(meta.JobType), jobId));
+        if (!string.IsNullOrEmpty(meta.MethodName))
+            tasks2.Add(batch2.SortedSetRemoveAsync(V2MethodIdx(meta.MethodName), jobId));
 
         foreach (var field in meta.Fields)
             if (!string.IsNullOrEmpty(field.Value))
@@ -510,6 +529,8 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         var keys = new List<RedisKey>();
         if (!string.IsNullOrEmpty(query.JobType))
             keys.Add((RedisKey)V2TypeIdx(query.JobType!));
+        if (!string.IsNullOrEmpty(query.MethodName))
+            keys.Add((RedisKey)V2MethodIdx(query.MethodName!));
         foreach (var f in query.Filters)
             if (!string.IsNullOrEmpty(f.Value))
                 keys.Add((RedisKey)V2FieldIdx(f.Key, f.Value));
@@ -578,6 +599,8 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
             return false;
         if (query.JobType != null && !string.Equals(meta.JobType, query.JobType, StringComparison.OrdinalIgnoreCase))
             return false;
+        if (query.MethodName != null && !string.Equals(meta.MethodName, query.MethodName, StringComparison.OrdinalIgnoreCase))
+            return false;
         foreach (var f in query.Filters)
         {
             if (!meta.Fields.TryGetValue(f.Key, out var v)) return false;
@@ -598,14 +621,14 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         foreach (var sort in sorts)
         {
             var capturedSort = sort;
-            Func<JobSearchMetadata, string> key = capturedSort.Field.ToLowerInvariant() switch
+            Func<JobSearchMetadata, JobSearchSortValue> key = capturedSort.Field.ToLowerInvariant() switch
             {
-                "jobid" => m => m.JobId,
-                "state" => m => m.State,
-                "jobtype" => m => m.JobType,
-                "methodname" => m => m.MethodName,
-                "createdat" => m => m.CreatedAt.ToUnixTimeMilliseconds().ToString("D20"),
-                _ => m => m.Fields.TryGetValue(capturedSort.Field, out var v) ? v ?? string.Empty : string.Empty,
+                "jobid" => m => JobSearchSortValue.From(m.JobId),
+                "state" => m => JobSearchSortValue.From(m.State),
+                "jobtype" => m => JobSearchSortValue.From(m.JobType),
+                "methodname" => m => JobSearchSortValue.From(m.MethodName),
+                "createdat" => m => JobSearchSortValue.From(m.CreatedAt.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                _ => m => JobSearchSortValue.From(m.Fields.TryGetValue(capturedSort.Field, out var v) ? v : null),
             };
 
             ordered = ordered is null

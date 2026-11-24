@@ -88,6 +88,7 @@ public sealed class JobSearchDashboardRendererTests
         Assert.Equal(20, query.PageSize);
         Assert.Equal("Succeeded", query.State);
         Assert.Equal(typeof(object).FullName, query.JobType);
+        Assert.Equal("ToString", query.MethodName);
         Assert.Empty(query.Sorts);
     }
 
@@ -113,6 +114,53 @@ public sealed class JobSearchDashboardRendererTests
 
         Assert.Contains("title=\"Sort ascending\"", html);
         Assert.Contains("title=\"Add descending sort\"", html);
+    }
+
+    [Fact]
+    public void Render_RespectsSortableFieldsAndValidSelectHtmlAndPageSize()
+    {
+        var model = CreateModel();
+        model.Query.PageSize = 50;
+        model.Result.PageSize = 50;
+        model.Result.TotalCount = 100;
+        model.SortableFields = new HashSet<string>(StringComparer.Ordinal) { "Field1" };
+
+        var html = JobSearchDashboardRenderer.Render(model);
+
+        Assert.Contains("<th>Field1<span class=\"hfjs-sort-links\">", html);
+        Assert.Contains("<th>Field2</th>", html);
+        Assert.DoesNotContain("\"\" onchange=", html);
+        Assert.DoesNotContain("name=\"state\"\">", html);
+        Assert.Contains("pageSize=50", html);
+    }
+
+    [Fact]
+    public void ViewModel_IncludesAwaitingStateAndSortableFields()
+    {
+        var options = new JobSearchOptions();
+        var definition = new JobSearchDefinition
+        {
+            JobType = typeof(object),
+            MethodName = "ToString",
+            Fields =
+            {
+                new JobSearchField { Name = "A", JsonPath = "$.A", DisplayInList = true, Sortable = true },
+                new JobSearchField { Name = "B", JsonPath = "$.B", DisplayInList = true, Sortable = false }
+            }
+        };
+        options.AddJobDefinition(definition);
+
+        var vm = JobSearchDashboardViewModel.From(
+            "/hangfire",
+            new JobSearchQuery(),
+            options,
+            new JobSearchResultPage(),
+            definition,
+            new Dictionary<string, int> { ["Awaiting"] = 3 });
+
+        Assert.Contains(vm.States, s => s.Value == "Awaiting" && s.Label == "Awaiting (3)");
+        Assert.Contains("A", vm.SortableFields);
+        Assert.DoesNotContain("B", vm.SortableFields);
     }
 
     private static JobSearchDashboardViewModel CreateModel()

@@ -25,6 +25,7 @@ internal sealed class JobSearchDashboardViewModel
     public IReadOnlyList<DefinitionOption> Definitions { get; set; } = Array.Empty<DefinitionOption>();
     public IReadOnlyList<string> FilterableFields { get; set; } = Array.Empty<string>();
     public IReadOnlyList<string> DisplayFields { get; set; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> SortableFields { get; set; } = Array.Empty<string>();
     public IReadOnlyList<string> JobTypes { get; set; } = Array.Empty<string>();
     public IReadOnlyList<StateOption> States { get; set; } = Array.Empty<StateOption>();
 
@@ -72,6 +73,9 @@ internal sealed class JobSearchDashboardViewModel
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .ToList(),
+            SortableFields = new HashSet<string>(
+                fields.Where(field => field.Sortable).Select(field => field.Name),
+                StringComparer.Ordinal),
             JobTypes = types,
             States = BuildStateOptions(stateCounts),
         };
@@ -79,7 +83,7 @@ internal sealed class JobSearchDashboardViewModel
 
     private static IReadOnlyList<StateOption> BuildStateOptions(IReadOnlyDictionary<string, int> stateCounts)
     {
-        var order = new[] { "Processing", "Enqueued", "Succeeded", "Failed", "Scheduled", "Deleted" };
+        var order = new[] { "Processing", "Enqueued", "Succeeded", "Failed", "Scheduled", "Awaiting", "Deleted" };
         var options = new List<StateOption>();
 
         foreach (var state in order)

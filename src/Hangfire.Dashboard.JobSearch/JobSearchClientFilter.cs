@@ -36,10 +36,10 @@ public sealed class JobSearchClientFilter : IClientFilter
             throw new ArgumentNullException(nameof(context));
         }
 
-        ProcessCreatedJob(context.BackgroundJob?.Id, context.Job);
+        ProcessCreatedJob(context.BackgroundJob?.Id, context.Job, context.InitialState?.Name);
     }
 
-    internal void ProcessCreatedJob(string? jobId, Job? job)
+    internal void ProcessCreatedJob(string? jobId, Job? job, string? initialState = null)
     {
         if (string.IsNullOrWhiteSpace(jobId) || job is null)
         {
@@ -61,7 +61,7 @@ public sealed class JobSearchClientFilter : IClientFilter
                 JobId = jobIdValue,
                 JobType = job.Type.FullName ?? job.Type.Name ?? string.Empty,
                 MethodName = job.Method.Name,
-                State = "Enqueued",
+                State = string.IsNullOrWhiteSpace(initialState) ? "Enqueued" : initialState!,
                 CreatedAt = DateTimeOffset.UtcNow,
                 Fields = fields.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
             };

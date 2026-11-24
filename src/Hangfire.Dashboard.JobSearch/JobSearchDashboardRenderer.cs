@@ -167,6 +167,10 @@ internal static class JobSearchDashboardRenderer
         }
 
         RenderHiddenInput(html, "sort", BuildSortQuery(model.Query.Sorts));
+        if (model.Query.PageSize > 0 && model.Query.PageSize != 20)
+        {
+            RenderHiddenInput(html, "pageSize", model.Query.PageSize.ToString());
+        }
         html.Append("<button class=\"btn btn-primary\" type=\"submit\">Apply Filters</button> ");
         html.Append("<a class=\"btn btn-default\" href=\"").Append(E(BuildResetUrl(model))).Append("\">Reset</a>");
         html.Append("</form>");
@@ -182,7 +186,8 @@ internal static class JobSearchDashboardRenderer
 
         foreach (var field in model.DisplayFields)
         {
-            RenderHeader(html, model, field, field);
+            var sortable = model.SortableFields.Contains(field);
+            RenderHeader(html, model, field, field, sortable);
         }
 
         html.Append("<th>Details</th></tr></thead><tbody>");
@@ -322,15 +327,19 @@ internal static class JobSearchDashboardRenderer
         html.Append("</ul></div>");
     }
 
-    private static void RenderHeader(StringBuilder html, JobSearchDashboardViewModel model, string label, string field)
+    private static void RenderHeader(StringBuilder html, JobSearchDashboardViewModel model, string label, string field, bool sortable = true)
     {
         html.Append("<th>").Append(E(label));
-        html.Append("<span class=\"hfjs-sort-links\">");
-        html.Append("<a title=\"Sort ascending\" href=\"").Append(E(BuildSortUrl(model, field, false, append: false))).Append("\">↑</a>");
-        html.Append("<a title=\"Sort descending\" href=\"").Append(E(BuildSortUrl(model, field, true, append: false))).Append("\">↓</a>");
-        html.Append("<a title=\"Add ascending sort\" href=\"").Append(E(BuildSortUrl(model, field, false, append: true))).Append("\">⇧↑</a>");
-        html.Append("<a title=\"Add descending sort\" href=\"").Append(E(BuildSortUrl(model, field, true, append: true))).Append("\">⇧↓</a>");
-        html.Append("</span></th>");
+        if (sortable)
+        {
+            html.Append("<span class=\"hfjs-sort-links\">");
+            html.Append("<a title=\"Sort ascending\" href=\"").Append(E(BuildSortUrl(model, field, false, append: false))).Append("\">↑</a>");
+            html.Append("<a title=\"Sort descending\" href=\"").Append(E(BuildSortUrl(model, field, true, append: false))).Append("\">↓</a>");
+            html.Append("<a title=\"Add ascending sort\" href=\"").Append(E(BuildSortUrl(model, field, false, append: true))).Append("\">⇧↑</a>");
+            html.Append("<a title=\"Add descending sort\" href=\"").Append(E(BuildSortUrl(model, field, true, append: true))).Append("\">⇧↓</a>");
+            html.Append("</span>");
+        }
+        html.Append("</th>");
     }
 
     private static void RenderSelect(
@@ -348,7 +357,7 @@ internal static class JobSearchDashboardRenderer
             .Append(E(name))
             .Append("\"")
             .Append(autoSubmit ? " onchange=\"this.form.submit()\"" : string.Empty)
-            .Append("\">");
+            .Append(">");
         if (includeAll)
         {
             AppendOption(html, string.Empty, selected, "All");
@@ -389,6 +398,10 @@ internal static class JobSearchDashboardRenderer
     {
         var query = new StringBuilder();
         AppendQuery(query, "page", page.ToString());
+        if (model.Query.PageSize > 0 && model.Query.PageSize != 20)
+        {
+            AppendQuery(query, "pageSize", model.Query.PageSize.ToString());
+        }
         AppendQuery(query, "jobId", model.Query.JobId);
         AppendQuery(query, "definition", model.SelectedDefinitionKey);
         AppendQuery(query, "state", model.Query.State);

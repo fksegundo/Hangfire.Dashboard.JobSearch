@@ -171,18 +171,44 @@ public sealed class InMemoryJobSearchStorageTests
         Assert.Empty(page.Items);
     }
 
+    [Fact]
+    public async Task SearchAsync_FiltersByMethodNameAndCaseInsensitiveField()
+    {
+        var storage = new InMemoryJobSearchStorage();
+        await storage.SaveMetadataAsync("1", CreateMetadata("1", field1: "ABC", methodName: "MethodOne"));
+        await storage.SaveMetadataAsync("2", CreateMetadata("2", field1: "ABC", methodName: "MethodTwo"));
+
+        var page = await storage.SearchAsync(new JobSearchQuery
+        {
+            JobType = "WorkerA",
+            MethodName = "MethodOne",
+            Filters = { ["Field1"] = "abc" }
+        });
+
+        var result = Assert.Single(page.Items);
+        Assert.Equal("1", result.JobId);
+
+        var counts = await storage.CountByStateAsync(new JobSearchQuery
+        {
+            JobType = "WorkerA",
+            MethodName = "MethodOne"
+        });
+        Assert.Equal(1, counts["Enqueued"]);
+    }
+
     private static JobSearchMetadata CreateMetadata(
         string jobId,
         string field1 = "123",
         string field2 = "42",
         string state = "Enqueued",
-        DateTimeOffset? createdAt = null)
+        DateTimeOffset? createdAt = null,
+        string methodName = "RunJobAsync")
     {
         return new JobSearchMetadata
         {
             JobId = jobId,
             JobType = "WorkerA",
-            MethodName = "RunJobAsync",
+            MethodName = methodName,
             State = state,
             CreatedAt = createdAt ?? DateTimeOffset.Parse("2026-05-03T10:00:00Z"),
             Fields =
