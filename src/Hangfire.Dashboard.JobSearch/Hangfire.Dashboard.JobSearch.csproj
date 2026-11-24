@@ -8,7 +8,7 @@
     <PackageId>fksegundo.Hangfire.Dashboard.JobSearch</PackageId>
     <Version>1.1.0</Version>
     <Authors>fksegundo</Authors>
-    <Description>Hangfire Dashboard extension: searchable, filterable, sortable job indexing with optional parent/child fan-out joins.</Description>
+    <Description>Hangfire Dashboard extension: searchable, filterable, sortable job indexing with optional parent/child fan-out joins (includes Core + Redis for v1.x backward compatibility).</Description>
     <RepositoryUrl>https://github.com/fksegundo/Hangfire.Dashboard.JobSearch</RepositoryUrl>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
 
@@ -24,14 +24,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Hangfire.Core" Version="1.8.18" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.2" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.2" />
-    <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <InternalsVisibleTo Include="Hangfire.Dashboard.JobSearch.Tests" />
+    <ProjectReference Include="..\Hangfire.Dashboard.JobSearch.Core\Hangfire.Dashboard.JobSearch.Core.csproj" />
+    <ProjectReference Include="..\Hangfire.Dashboard.JobSearch.Redis\Hangfire.Dashboard.JobSearch.Redis.csproj" />
   </ItemGroup>
 
 </Project>

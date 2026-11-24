@@ -7,7 +7,7 @@ using StackExchange.Redis;
 
 namespace Hangfire.Dashboard.JobSearch;
 
-public sealed class RedisJobSearchStorage : IJobSearchStorage
+public sealed class RedisJobSearchStorage : IJobSearchStorage, IJobSearchBulkChildStorage
 {
     private readonly IConnectionMultiplexer _connection;
     private readonly string _prefix;
@@ -406,13 +406,15 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         }
     }
 
-    internal async Task<Dictionary<string, List<JobSearchResult>>> SearchChildrenBulkAsync(
+    public async Task<Dictionary<string, List<JobSearchResult>>> SearchChildrenBulkAsync(
         string childJobType,
         string childMethodName,
         string keyField,
         IReadOnlyList<string> parentKeys,
-        int maxPerKey)
+        int maxPerKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var db = Db;
         var result = new Dictionary<string, List<JobSearchResult>>(StringComparer.Ordinal);
 

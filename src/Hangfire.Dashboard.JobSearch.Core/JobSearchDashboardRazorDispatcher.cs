@@ -323,9 +323,9 @@ internal sealed class JobSearchDashboardRazorDispatcher : IDashboardDispatcher
             return;
         }
 
-        if (storage is RedisJobSearchStorage redisStorage)
+        if (storage is IJobSearchBulkChildStorage bulkStorage)
         {
-            await AttachChildrenBulkAsync(redisStorage, options, result).ConfigureAwait(false);
+            await AttachChildrenBulkAsync(bulkStorage, options, result).ConfigureAwait(false);
             return;
         }
 
@@ -333,7 +333,7 @@ internal sealed class JobSearchDashboardRazorDispatcher : IDashboardDispatcher
     }
 
     private static async Task AttachChildrenBulkAsync(
-        RedisJobSearchStorage storage,
+        IJobSearchBulkChildStorage storage,
         JobSearchOptions options,
         JobSearchResultPage result)
     {

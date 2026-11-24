@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Hangfire.Dashboard.JobSearch</RootNamespace>
+
+    <PackageId>fksegundo.Hangfire.Dashboard.JobSearch.Core</PackageId>
+    <Version>1.1.0</Version>
+    <Authors>fksegundo</Authors>
+    <Description>Core library for Hangfire Dashboard JobSearch: metadata extraction, dashboard UI, fluent configuration, in-memory storage, and storage abstractions.</Description>
+    <RepositoryUrl>https://github.com/fksegundo/Hangfire.Dashboard.JobSearch</RepositoryUrl>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)..\..\dist</PackageOutputPath>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hangfire.Core" Version="1.8.18" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hangfire.Dashboard.JobSearch.Redis" />
+    <InternalsVisibleTo Include="Hangfire.Dashboard.JobSearch.SqlServer" />
+    <InternalsVisibleTo Include="Hangfire.Dashboard.JobSearch.PostgreSql" />
+    <InternalsVisibleTo Include="Hangfire.Dashboard.JobSearch.Tests" />
+  </ItemGroup>
+
+</Project>
