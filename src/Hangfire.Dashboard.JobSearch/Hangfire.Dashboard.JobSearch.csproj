@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
 
     <PackageId>fksegundo.Hangfire.Dashboard.JobSearch</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>fksegundo</Authors>
     <Description>Hangfire Dashboard extension: searchable, filterable, sortable job indexing with optional parent/child fan-out joins (includes Core + Redis for v1.x backward compatibility).</Description>
     <RepositoryUrl>https://github.com/fksegundo/Hangfire.Dashboard.JobSearch</RepositoryUrl>

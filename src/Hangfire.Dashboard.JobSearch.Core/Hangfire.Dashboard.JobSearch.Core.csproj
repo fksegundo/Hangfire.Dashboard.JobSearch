@@ -7,7 +7,7 @@
     <RootNamespace>Hangfire.Dashboard.JobSearch</RootNamespace>
 
     <PackageId>fksegundo.Hangfire.Dashboard.JobSearch.Core</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>fksegundo</Authors>
     <Description>Core library for Hangfire Dashboard JobSearch: metadata extraction, dashboard UI, fluent configuration, in-memory storage, and storage abstractions.</Description>
     <RepositoryUrl>https://github.com/fksegundo/Hangfire.Dashboard.JobSearch</RepositoryUrl>

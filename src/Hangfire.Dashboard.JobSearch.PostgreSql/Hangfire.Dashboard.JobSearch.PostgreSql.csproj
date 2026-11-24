@@ -7,7 +7,7 @@
     <RootNamespace>Hangfire.Dashboard.JobSearch</RootNamespace>
 
     <PackageId>fksegundo.Hangfire.Dashboard.JobSearch.PostgreSql</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>fksegundo</Authors>
     <Description>PostgreSQL storage provider for Hangfire.Dashboard.JobSearch.</Description>
     <RepositoryUrl>https://github.com/fksegundo/Hangfire.Dashboard.JobSearch</RepositoryUrl>
