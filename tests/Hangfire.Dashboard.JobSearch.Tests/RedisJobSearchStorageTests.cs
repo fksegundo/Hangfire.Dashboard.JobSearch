@@ -364,4 +364,35 @@ public sealed class RedisJobSearchStorageTests : IAsyncLifetime
         await Assert.ThrowsAsync<OperationCanceledException>(
             () => _storage.SearchAsync(new JobSearchQuery(), cts.Token));
     }
+
+    [Fact]
+    public async Task Search_DateRangeMultiValueAndPrefix_WorkServerSide()
+    {
+        var storage = new RedisJobSearchStorage(_connection, "hangfire:jobsearch:adv", expiry: TimeSpan.FromMinutes(5));
+        var t0 = DateTimeOffset.UtcNow.AddHours(-5);
+        await storage.SaveMetadataAsync("a1", Meta("a1", createdAt: t0, fields: F(("OrderId", "ORD-100"), ("Tenant", "acme"))));
+        await storage.SaveMetadataAsync("a2", Meta("a2", createdAt: t0.AddHours(2), fields: F(("OrderId", "ORD-109"), ("Tenant", "globex"))));
+        await storage.SaveMetadataAsync("a3", Meta("a3", createdAt: t0.AddHours(4), fields: F(("OrderId", "INV-500"), ("Tenant", "initech"))));
+
+        var prefixPage = await storage.SearchAsync(new JobSearchQuery { Filters = { ["OrderId"] = "ORD-10*" } });
+        Assert.Equal(2, prefixPage.TotalCount);
+
+        var multiPage = await storage.SearchAsync(new JobSearchQuery { Filters = { ["Tenant"] = "acme,initech" } });
+        Assert.Equal(2, multiPage.TotalCount);
+
+        var datePage = await storage.SearchAsync(new JobSearchQuery
+        {
+            CreatedFrom = t0.AddHours(1),
+            CreatedTo = t0.AddHours(3)
+        });
+        var single = Assert.Single(datePage.Items);
+        Assert.Equal("a2", single.JobId);
+
+        var counts = await storage.CountByStateAsync(new JobSearchQuery
+        {
+            CreatedFrom = t0.AddHours(1),
+            CreatedTo = t0.AddHours(3)
+        });
+        Assert.Equal(1, counts["Enqueued"]);
+    }
 }

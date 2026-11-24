@@ -151,6 +151,8 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
             JobId = query.JobId,
             JobType = query.JobType,
             MethodName = query.MethodName,
+            CreatedFrom = query.CreatedFrom,
+            CreatedTo = query.CreatedTo,
             State = null,
             Filters = new Dictionary<string, string>(query.Filters, StringComparer.Ordinal)
         };
@@ -190,10 +192,20 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
             return false;
         }
 
+        if (query.CreatedFrom.HasValue && result.CreatedAt < query.CreatedFrom.Value)
+        {
+            return false;
+        }
+
+        if (query.CreatedTo.HasValue && result.CreatedAt > query.CreatedTo.Value)
+        {
+            return false;
+        }
+
         foreach (var filter in query.Filters.Where(filter => !string.IsNullOrWhiteSpace(filter.Value)))
         {
             if (!result.Fields.TryGetValue(filter.Key, out var value)
-                || !string.Equals(value, filter.Value, StringComparison.OrdinalIgnoreCase))
+                || !JobSearchFilterMatcher.Matches(value, filter.Value))
             {
                 return false;
             }

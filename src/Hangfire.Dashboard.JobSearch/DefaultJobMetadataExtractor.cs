@@ -46,6 +46,11 @@ public sealed class DefaultJobMetadataExtractor : IJobMetadataExtractor
 
     private static string? ExtractField(Job job, JobSearchField field)
     {
+        if (field.ValueExtractor is not null)
+        {
+            return field.ValueExtractor(job);
+        }
+
         if (field.ArgumentIndex < 0 || field.ArgumentIndex >= job.Args.Count)
         {
             return null;
@@ -67,14 +72,20 @@ public sealed class DefaultJobMetadataExtractor : IJobMetadataExtractor
             return value;
         }
 
-        if (!path.StartsWith("$.", StringComparison.Ordinal))
+        var normalized = path.StartsWith("$.", StringComparison.Ordinal)
+            ? path.Substring(2)
+            : path.StartsWith("$[", StringComparison.Ordinal)
+                ? path.Substring(1)
+                : null;
+
+        if (normalized is null)
         {
             return null;
         }
 
-        foreach (var segment in path.Substring(2).Split('.').Where(segment => segment.Length > 0))
+        foreach (var rawSegment in normalized.Split('.').Where(segment => segment.Length > 0))
         {
-            value = ResolveSegment(value, segment);
+            value = ResolveSegmentWithIndexers(value, rawSegment);
             if (value is null)
             {
                 return null;
@@ -82,6 +93,75 @@ public sealed class DefaultJobMetadataExtractor : IJobMetadataExtractor
         }
 
         return value;
+    }
+
+    private static object? ResolveSegmentWithIndexers(object value, string segment)
+    {
+        var bracketIndex = segment.IndexOf('[');
+        if (bracketIndex < 0)
+        {
+            return ResolveSegment(value, segment);
+        }
+
+        object? current = value;
+        if (bracketIndex > 0)
+        {
+            var propertyPart = segment.Substring(0, bracketIndex);
+            current = ResolveSegment(current, propertyPart);
+            if (current is null)
+            {
+                return null;
+            }
+        }
+
+        var pos = bracketIndex;
+        while (pos < segment.Length && segment[pos] == '[')
+        {
+            var close = segment.IndexOf(']', pos + 1);
+            if (close < 0)
+            {
+                return null;
+            }
+
+            var indexText = segment.Substring(pos + 1, close - pos - 1);
+            if (!int.TryParse(indexText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) || index < 0)
+            {
+                return null;
+            }
+
+            current = ResolveIndex(current, index);
+            if (current is null)
+            {
+                return null;
+            }
+
+            pos = close + 1;
+        }
+
+        return current;
+    }
+
+    private static object? ResolveIndex(object value, int index)
+    {
+        if (value is IList list)
+        {
+            return index < list.Count ? list[index] : null;
+        }
+
+        if (value is IEnumerable enumerable && value is not string)
+        {
+            var i = 0;
+            foreach (var item in enumerable)
+            {
+                if (i == index)
+                {
+                    return item;
+                }
+                i++;
+            }
+        }
+
+        return null;
     }
 
     private static object? ResolveSegment(object value, string segment)
