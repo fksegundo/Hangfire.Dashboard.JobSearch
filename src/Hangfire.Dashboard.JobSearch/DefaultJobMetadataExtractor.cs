@@ -1,8 +1,10 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using Hangfire.Common;
 
@@ -10,6 +12,9 @@ namespace Hangfire.Dashboard.JobSearch;
 
 public sealed class DefaultJobMetadataExtractor : IJobMetadataExtractor
 {
+    private static readonly ConcurrentDictionary<(Type Type, string PropertyName), Func<object, object?>?> PropertyGetterCache =
+        new ConcurrentDictionary<(Type, string), Func<object, object?>?>();
+
     private readonly JobSearchOptions _options;
 
     public DefaultJobMetadataExtractor(JobSearchOptions options)
@@ -92,8 +97,23 @@ public sealed class DefaultJobMetadataExtractor : IJobMetadataExtractor
             return stringDictionary[segment];
         }
 
-        var property = value.GetType().GetRuntimeProperty(segment);
-        return property?.GetValue(value);
+        var getter = PropertyGetterCache.GetOrAdd((value.GetType(), segment), BuildPropertyGetter);
+        return getter?.Invoke(value);
+    }
+
+    private static Func<object, object?>? BuildPropertyGetter((Type Type, string PropertyName) key)
+    {
+        var property = key.Type.GetRuntimeProperty(key.PropertyName);
+        if (property is null || !property.CanRead || property.GetIndexParameters().Length > 0)
+        {
+            return null;
+        }
+
+        var instanceParam = Expression.Parameter(typeof(object), "instance");
+        var typedInstance = Expression.Convert(instanceParam, key.Type);
+        var propertyAccess = Expression.Property(typedInstance, property);
+        var boxedResult = Expression.Convert(propertyAccess, typeof(object));
+        return Expression.Lambda<Func<object, object?>>(boxedResult, instanceParam).Compile();
     }
 
     private static string? ConvertToString(object? value)

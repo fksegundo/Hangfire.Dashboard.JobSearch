@@ -33,14 +33,41 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         "redis.call('HSET', KEYS[1], 'state', ARGV[2])\n" +
         "return 1";
 
+    // KEYS[1]=tmpBaseKey, KEYS[2..baseCount+1]=baseFilterKeys, KEYS[baseCount+2..]=stateIdxKeys
+    // ARGV[1]=baseCount, ARGV[2]=tmpStateKey
+    private static readonly string CountByStateScript =
+        "local baseCount = tonumber(ARGV[1])\n" +
+        "local tmpState = ARGV[2]\n" +
+        "local baseKey = KEYS[2]\n" +
+        "local createdBase = false\n" +
+        "if baseCount > 1 then\n" +
+        "  local args = {}\n" +
+        "  for i = 2, baseCount + 1 do args[#args + 1] = KEYS[i] end\n" +
+        "  redis.call('ZINTERSTORE', KEYS[1], baseCount, unpack(args), 'AGGREGATE', 'MIN')\n" +
+        "  baseKey = KEYS[1]\n" +
+        "  createdBase = true\n" +
+        "end\n" +
+        "local counts = {}\n" +
+        "for i = baseCount + 2, #KEYS do\n" +
+        "  redis.call('ZINTERSTORE', tmpState, 2, baseKey, KEYS[i], 'AGGREGATE', 'MIN')\n" +
+        "  counts[#counts + 1] = redis.call('ZCARD', tmpState)\n" +
+        "end\n" +
+        "redis.call('DEL', tmpState)\n" +
+        "if createdBase then redis.call('DEL', KEYS[1]) end\n" +
+        "return counts";
+
     public RedisJobSearchStorage(
         IConnectionMultiplexer connection,
         string keyPrefix = "hangfire:jobsearch",
         TimeSpan? expiry = null,
-        int maxSortWindow = 5000)
+        int maxSortWindow = 5000,
+        bool useClusterHashTag = false)
     {
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
-        _prefix = keyPrefix ?? throw new ArgumentNullException(nameof(keyPrefix));
+        if (keyPrefix is null) throw new ArgumentNullException(nameof(keyPrefix));
+        _prefix = useClusterHashTag && !keyPrefix.Contains('{') && !keyPrefix.Contains('}')
+            ? $"{{{keyPrefix}}}"
+            : keyPrefix;
         _expiry = expiry;
         _maxSortWindow = maxSortWindow > 0 ? maxSortWindow : 5000;
     }
@@ -61,6 +88,7 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
     {
         if (string.IsNullOrEmpty(jobId)) throw new ArgumentException("Job id is required.", nameof(jobId));
         if (metadata is null) throw new ArgumentNullException(nameof(metadata));
+        cancellationToken.ThrowIfCancellationRequested();
 
         var db = Db;
         var metaKey = V2MetaKey(jobId);
@@ -121,6 +149,7 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
     {
         if (string.IsNullOrEmpty(jobId)) throw new ArgumentException("Job id is required.", nameof(jobId));
         if (string.IsNullOrEmpty(state)) throw new ArgumentException("State is required.", nameof(state));
+        cancellationToken.ThrowIfCancellationRequested();
 
         var db = Db;
         var metaKey = V2MetaKey(jobId);
@@ -144,6 +173,7 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
     public async Task DeleteMetadataAsync(string jobId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(jobId)) throw new ArgumentException("Job id is required.", nameof(jobId));
+        cancellationToken.ThrowIfCancellationRequested();
 
         var db = Db;
         var metaKey = V2MetaKey(jobId);
@@ -191,6 +221,7 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
     public async Task<JobSearchResultPage> SearchAsync(JobSearchQuery query, CancellationToken cancellationToken = default)
     {
         if (query is null) throw new ArgumentNullException(nameof(query));
+        cancellationToken.ThrowIfCancellationRequested();
 
         var db = Db;
         var page = Math.Max(1, query.Page);
@@ -262,6 +293,7 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
     public async Task<IReadOnlyDictionary<string, int>> CountByStateAsync(JobSearchQuery query, CancellationToken cancellationToken = default)
     {
         if (query is null) throw new ArgumentNullException(nameof(query));
+        cancellationToken.ThrowIfCancellationRequested();
 
         var db = Db;
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -293,11 +325,26 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         }
         else
         {
-            var stateCounts = await Task.WhenAll(
-                KnownHangfireStates.Select(s => CountStateWithFiltersAsync(db, baseKeys, s)));
+            var keys = new RedisKey[1 + baseKeys.Count + KnownHangfireStates.Length];
+            keys[0] = (RedisKey)V2TmpKey();
+            for (var i = 0; i < baseKeys.Count; i++)
+                keys[1 + i] = baseKeys[i];
+            for (var i = 0; i < KnownHangfireStates.Length; i++)
+                keys[1 + baseKeys.Count + i] = (RedisKey)V2StateIdx(KnownHangfireStates[i]);
 
-            foreach (var (state, count) in stateCounts)
-                if (count > 0) counts[state] = count;
+            var result = (RedisResult[]?)await db.ScriptEvaluateAsync(
+                CountByStateScript,
+                keys: keys,
+                values: new RedisValue[] { baseKeys.Count, V2TmpKey() });
+
+            if (result != null)
+            {
+                for (var i = 0; i < KnownHangfireStates.Length && i < result.Length; i++)
+                {
+                    var count = (int)result[i];
+                    if (count > 0) counts[KnownHangfireStates[i]] = count;
+                }
+            }
         }
 
         return counts;
@@ -367,28 +414,6 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage
         }
 
         return result;
-    }
-
-    private async Task<(string State, int Count)> CountStateWithFiltersAsync(
-        IDatabase db,
-        IReadOnlyList<RedisKey> baseKeys,
-        string state)
-    {
-        var keys = new RedisKey[baseKeys.Count + 1];
-        for (var i = 0; i < baseKeys.Count; i++) keys[i] = baseKeys[i];
-        keys[baseKeys.Count] = (RedisKey)V2StateIdx(state);
-
-        var tmpKey = (RedisKey)V2TmpKey();
-        try
-        {
-            await db.SortedSetCombineAndStoreAsync(SetOperation.Intersect, tmpKey, keys, aggregate: Aggregate.Min);
-            await db.KeyExpireAsync(tmpKey, TimeSpan.FromSeconds(5));
-            return (state, (int)await db.SortedSetLengthAsync(tmpKey));
-        }
-        finally
-        {
-            await db.KeyDeleteAsync(tmpKey);
-        }
     }
 
     private async Task<JobSearchResultPage> SearchByJobIdAsync(IDatabase db, JobSearchQuery query, int page, int pageSize)

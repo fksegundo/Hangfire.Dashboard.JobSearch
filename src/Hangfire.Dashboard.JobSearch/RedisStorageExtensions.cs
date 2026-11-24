@@ -10,12 +10,13 @@ public static class RedisStorageExtensions
         IConnectionMultiplexer connection,
         string keyPrefix = "hangfire:jobsearch",
         TimeSpan? expiry = null,
-        int maxSortWindow = 5000)
+        int maxSortWindow = 5000,
+        bool useClusterHashTag = false)
     {
         if (options is null) throw new ArgumentNullException(nameof(options));
         if (connection is null) throw new ArgumentNullException(nameof(connection));
 
-        options.UseStorage(_ => new RedisJobSearchStorage(connection, keyPrefix, expiry, maxSortWindow));
+        options.UseStorage(_ => new RedisJobSearchStorage(connection, keyPrefix, expiry, maxSortWindow, useClusterHashTag));
     }
 
     public static void UseRedisStorage(
@@ -23,11 +24,12 @@ public static class RedisStorageExtensions
         Func<IServiceProvider, IConnectionMultiplexer> connectionFactory,
         string keyPrefix = "hangfire:jobsearch",
         TimeSpan? expiry = null,
-        int maxSortWindow = 5000)
+        int maxSortWindow = 5000,
+        bool useClusterHashTag = false)
     {
         if (options is null) throw new ArgumentNullException(nameof(options));
         if (connectionFactory is null) throw new ArgumentNullException(nameof(connectionFactory));
 
-        options.UseStorage(provider => new RedisJobSearchStorage(connectionFactory(provider), keyPrefix, expiry, maxSortWindow));
+        options.UseStorage(provider => new RedisJobSearchStorage(connectionFactory(provider), keyPrefix, expiry, maxSortWindow, useClusterHashTag));
     }
 }

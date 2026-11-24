@@ -11,6 +11,28 @@ namespace Hangfire.Dashboard.JobSearch;
 public sealed class InMemoryJobSearchStorage : IJobSearchStorage
 {
     private readonly ConcurrentDictionary<string, JobSearchMetadata> _metadata = new ConcurrentDictionary<string, JobSearchMetadata>(StringComparer.Ordinal);
+    private readonly int? _maxEntries;
+    private readonly TimeSpan? _expiry;
+
+    public InMemoryJobSearchStorage()
+    {
+    }
+
+    public InMemoryJobSearchStorage(int? maxEntries = null, TimeSpan? expiry = null)
+    {
+        if (maxEntries.HasValue && maxEntries.Value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxEntries), "Max entries must be positive.");
+        }
+
+        if (expiry.HasValue && expiry.Value <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(expiry), "Expiry must be positive.");
+        }
+
+        _maxEntries = maxEntries;
+        _expiry = expiry;
+    }
 
     public Task SaveMetadataAsync(
         string jobId,
@@ -29,6 +51,7 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
 
         cancellationToken.ThrowIfCancellationRequested();
         _metadata[jobId] = CloneMetadata(metadata);
+        CleanupIfNeeded();
 
         return Task.CompletedTask;
     }
@@ -43,6 +66,7 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        RemoveExpired();
 
         var page = Math.Max(1, query.Page);
         var pageSize = query.PageSize <= 0 ? 20 : query.PageSize;
@@ -100,10 +124,11 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (_metadata.TryGetValue(jobId, out var metadata))
+        if (_metadata.TryGetValue(jobId, out var existing))
         {
-            metadata.State = state;
-            _metadata[jobId] = CloneMetadata(metadata);
+            var updated = CloneMetadata(existing);
+            updated.State = state;
+            _metadata[jobId] = updated;
         }
 
         return Task.CompletedTask;
@@ -119,6 +144,7 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        RemoveExpired();
 
         var baseQuery = new JobSearchQuery
         {
@@ -256,6 +282,46 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
             CreatedAt = metadata.CreatedAt,
             Fields = new Dictionary<string, string?>(metadata.Fields, StringComparer.Ordinal)
         };
+    }
+
+    private void CleanupIfNeeded()
+    {
+        RemoveExpired();
+
+        if (!_maxEntries.HasValue || _metadata.Count <= _maxEntries.Value)
+        {
+            return;
+        }
+
+        var overflow = _metadata.Count - _maxEntries.Value;
+        var oldestKeys = _metadata
+            .OrderBy(pair => pair.Value.CreatedAt)
+            .ThenBy(pair => pair.Key, StringComparer.Ordinal)
+            .Take(overflow)
+            .Select(pair => pair.Key)
+            .ToList();
+
+        foreach (var key in oldestKeys)
+        {
+            _metadata.TryRemove(key, out _);
+        }
+    }
+
+    private void RemoveExpired()
+    {
+        if (!_expiry.HasValue)
+        {
+            return;
+        }
+
+        var cutoff = DateTimeOffset.UtcNow - _expiry.Value;
+        foreach (var pair in _metadata)
+        {
+            if (pair.Value.CreatedAt < cutoff)
+            {
+                _metadata.TryRemove(pair.Key, out _);
+            }
+        }
     }
 
     private static JobSearchMetadata CloneMetadata(JobSearchMetadata metadata)

@@ -332,4 +332,36 @@ public sealed class RedisJobSearchStorageTests : IAsyncLifetime
         Assert.DoesNotContain($"{prefix}:v2:idx:state:enqueued", revMembers);
         Assert.Contains($"{prefix}:v2:idx:state:succeeded", revMembers);
     }
+
+    [Fact]
+    public async Task ClusterHashTag_WrapsPrefixInBraces()
+    {
+        var storage = new RedisJobSearchStorage(
+            _connection,
+            keyPrefix: "hangfire:cluster",
+            expiry: TimeSpan.FromMinutes(5),
+            useClusterHashTag: true);
+
+        await storage.SaveMetadataAsync("c1", Meta("c1", state: "Enqueued", fields: F(("Tenant", "t1"))));
+
+        var db = _connection.GetDatabase();
+        Assert.True(await db.KeyExistsAsync("{hangfire:cluster}:v2:meta:c1"));
+
+        var counts = await storage.CountByStateAsync(new JobSearchQuery
+        {
+            JobType = "TestJob",
+            Filters = { ["Tenant"] = "t1" }
+        });
+        Assert.Equal(1, counts["Enqueued"]);
+    }
+
+    [Fact]
+    public async Task Methods_RespectCancellationToken()
+    {
+        using var cts = new System.Threading.CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => _storage.SearchAsync(new JobSearchQuery(), cts.Token));
+    }
 }
