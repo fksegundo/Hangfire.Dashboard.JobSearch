@@ -88,6 +88,7 @@ public sealed class JobSearchDashboardRendererTests
         Assert.Equal(20, query.PageSize);
         Assert.Equal("Succeeded", query.State);
         Assert.Equal(typeof(object).FullName, query.JobType);
+        Assert.Equal("ToString", query.MethodName);
         Assert.Empty(query.Sorts);
     }
 
@@ -113,6 +114,130 @@ public sealed class JobSearchDashboardRendererTests
 
         Assert.Contains("title=\"Sort ascending\"", html);
         Assert.Contains("title=\"Add descending sort\"", html);
+    }
+
+    [Fact]
+    public void Render_RespectsSortableFieldsAndValidSelectHtmlAndPageSize()
+    {
+        var model = CreateModel();
+        model.Query.PageSize = 50;
+        model.Result.PageSize = 50;
+        model.Result.TotalCount = 100;
+        model.SortableFields = new HashSet<string>(StringComparer.Ordinal) { "Field1" };
+
+        var html = JobSearchDashboardRenderer.Render(model);
+
+        Assert.Contains("<th>Field1<span class=\"hfjs-sort-links\">", html);
+        Assert.Contains("<th>Field2</th>", html);
+        Assert.DoesNotContain("\"\" onchange=", html);
+        Assert.DoesNotContain("name=\"state\"\">", html);
+        Assert.Contains("pageSize=50", html);
+    }
+
+    [Fact]
+    public void ViewModel_IncludesAwaitingStateAndSortableFields()
+    {
+        var options = new JobSearchOptions();
+        var definition = new JobSearchDefinition
+        {
+            JobType = typeof(object),
+            MethodName = "ToString",
+            Fields =
+            {
+                new JobSearchField { Name = "A", JsonPath = "$.A", DisplayInList = true, Sortable = true },
+                new JobSearchField { Name = "B", JsonPath = "$.B", DisplayInList = true, Sortable = false }
+            }
+        };
+        options.AddJobDefinition(definition);
+
+        var vm = JobSearchDashboardViewModel.From(
+            "/hangfire",
+            new JobSearchQuery(),
+            options,
+            new JobSearchResultPage(),
+            definition,
+            new Dictionary<string, int> { ["Awaiting"] = 3 });
+
+        Assert.Contains(vm.States, s => s.Value == "Awaiting" && s.Label == "Awaiting (3)");
+        Assert.Contains(vm.States, s => s.Value == "all" && s.Label == "All (3)");
+        Assert.Contains("A", vm.SortableFields);
+        Assert.DoesNotContain("B", vm.SortableFields);
+    }
+
+    [Fact]
+    public void QueryMapper_MapsAllStateToNull()
+    {
+        var values = new Dictionary<string, string> { ["state"] = "all" };
+        var query = JobSearchDashboardQueryMapper.Map(
+            k => values.TryGetValue(k, out var v) ? v : null,
+            selectedDefinition: null);
+
+        Assert.Null(query.State);
+    }
+
+    [Fact]
+    public void Render_IncludesStateTabsExportLinksQuickActionsAndJoinSummary()
+    {
+        var model = CreateModel();
+        model.Result.Items[0].LastError = "TimeoutException: upstream timed out";
+        model.Result.Items[0].Duration = TimeSpan.FromMilliseconds(450);
+        model.Result.Items[0].ChildrenLabel = "invoices";
+        model.Result.Items[0].Children = new[]
+        {
+            new JobSearchResult { JobId = "c1", State = "Succeeded", MethodName = "Run" },
+            new JobSearchResult { JobId = "c2", State = "Failed", MethodName = "Run" }
+        };
+
+        var html = JobSearchDashboardRenderer.Render(model);
+
+        Assert.Contains("class=\"hfjs-state-tabs\"", html);
+        Assert.Contains("export=csv", html);
+        Assert.Contains("export=json", html);
+        Assert.Contains("Requeue Selected", html);
+        Assert.Contains("Delete Selected", html);
+        Assert.Contains("hfjs-results-region", html);
+        Assert.Contains("TimeoutException: upstream timed out", html);
+        Assert.Contains("450ms", html);
+        Assert.Contains("1 succeeded", html);
+        Assert.Contains("1 failed", html);
+    }
+
+    [Fact]
+    public void Render_HidesQuickActionsWhenReadOnly()
+    {
+        var model = CreateModel();
+        model.IsReadOnly = true;
+
+        var html = JobSearchDashboardRenderer.Render(model);
+
+        Assert.DoesNotContain("Requeue Selected", html);
+        Assert.DoesNotContain("data-job-id=", html);
+        Assert.DoesNotContain("id=\"hfjs-select-all\"", html);
+    }
+
+    [Fact]
+    public void ExportHelpers_GenerateValidCsvAndJson()
+    {
+        var items = new[]
+        {
+            new JobSearchResult
+            {
+                JobId = "j1",
+                State = "Succeeded",
+                JobType = "WorkerA",
+                MethodName = "Run",
+                CreatedAt = DateTimeOffset.Parse("2026-05-03T12:00:00Z"),
+                Fields = new Dictionary<string, string?> { ["Tenant"] = "Acme, Inc." }
+            }
+        };
+
+        var csv = JobSearchDashboardRazorDispatcher.BuildCsvExport(items, new[] { "Tenant" });
+        Assert.Contains("JobId,State,JobType,MethodName,CreatedAt,Tenant", csv);
+        Assert.Contains("\"Acme, Inc.\"", csv);
+
+        var json = JobSearchDashboardRazorDispatcher.BuildJsonExport(items);
+        Assert.Contains("\"jobId\":\"j1\"", json);
+        Assert.Contains("\"Tenant\":\"Acme, Inc.\"", json);
     }
 
     private static JobSearchDashboardViewModel CreateModel()

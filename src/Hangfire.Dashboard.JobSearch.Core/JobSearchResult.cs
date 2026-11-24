@@ -40,4 +40,14 @@ public sealed class JobSearchResult
     /// Value that was actually used to search for children (set by the dashboard pipeline, diagnostic).
     /// </summary>
     public string? ChildrenLookupValue { get; set; }
+
+    /// <summary>
+    /// Optional summary of the last exception message for failed jobs (populated by the dashboard pipeline).
+    /// </summary>
+    public string? LastError { get; set; }
+
+    /// <summary>
+    /// Optional execution duration for completed jobs (populated by the dashboard pipeline).
+    /// </summary>
+    public TimeSpan? Duration { get; set; }
 }

@@ -16,15 +16,21 @@ internal sealed class JobSearchDashboardViewModel
     {
         public string Value { get; set; } = string.Empty;
         public string Label { get; set; } = string.Empty;
+        public int Count { get; set; }
     }
 
     public string PathBase { get; set; } = string.Empty;
+    public string RoutePath { get; set; } = "/job-search";
+    public string MenuTitle { get; set; } = "Job Search";
+    public int AutoRefreshIntervalSeconds { get; set; } = 5;
+    public bool IsReadOnly { get; set; }
     public JobSearchQuery Query { get; set; } = new JobSearchQuery();
     public JobSearchResultPage Result { get; set; } = new JobSearchResultPage();
     public string SelectedDefinitionKey { get; set; } = string.Empty;
     public IReadOnlyList<DefinitionOption> Definitions { get; set; } = Array.Empty<DefinitionOption>();
     public IReadOnlyList<string> FilterableFields { get; set; } = Array.Empty<string>();
     public IReadOnlyList<string> DisplayFields { get; set; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> SortableFields { get; set; } = Array.Empty<string>();
     public IReadOnlyList<string> JobTypes { get; set; } = Array.Empty<string>();
     public IReadOnlyList<StateOption> States { get; set; } = Array.Empty<StateOption>();
 
@@ -34,7 +40,8 @@ internal sealed class JobSearchDashboardViewModel
         JobSearchOptions options,
         JobSearchResultPage result,
         JobSearchDefinition? selectedDefinition,
-        IReadOnlyDictionary<string, int> stateCounts)
+        IReadOnlyDictionary<string, int> stateCounts,
+        bool isReadOnly = false)
     {
         var fields = (selectedDefinition?.Fields ?? new List<JobSearchField>()).ToList();
         var types = options.Definitions
@@ -53,6 +60,10 @@ internal sealed class JobSearchDashboardViewModel
         return new JobSearchDashboardViewModel
         {
             PathBase = pathBase ?? string.Empty,
+            RoutePath = GlobalConfigurationExtensions.NormalizeRoutePath(options.RoutePath),
+            MenuTitle = string.IsNullOrWhiteSpace(options.MenuTitle) ? "Job Search" : options.MenuTitle,
+            AutoRefreshIntervalSeconds = options.AutoRefreshIntervalSeconds,
+            IsReadOnly = isReadOnly,
             Query = query,
             Result = result,
             SelectedDefinitionKey = selectedDefinition is null
@@ -72,6 +83,9 @@ internal sealed class JobSearchDashboardViewModel
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .ToList(),
+            SortableFields = new HashSet<string>(
+                fields.Where(field => field.Sortable).Select(field => field.Name),
+                StringComparer.Ordinal),
             JobTypes = types,
             States = BuildStateOptions(stateCounts),
         };
@@ -79,8 +93,16 @@ internal sealed class JobSearchDashboardViewModel
 
     private static IReadOnlyList<StateOption> BuildStateOptions(IReadOnlyDictionary<string, int> stateCounts)
     {
-        var order = new[] { "Processing", "Enqueued", "Succeeded", "Failed", "Scheduled", "Deleted" };
+        var order = new[] { "Processing", "Enqueued", "Succeeded", "Failed", "Scheduled", "Awaiting", "Deleted" };
         var options = new List<StateOption>();
+
+        var total = stateCounts.Values.Sum();
+        options.Add(new StateOption
+        {
+            Value = "all",
+            Label = $"All ({total})",
+            Count = total
+        });
 
         foreach (var state in order)
         {
@@ -88,7 +110,8 @@ internal sealed class JobSearchDashboardViewModel
             options.Add(new StateOption
             {
                 Value = state,
-                Label = $"{state} ({count})"
+                Label = $"{state} ({count})",
+                Count = count
             });
         }
 

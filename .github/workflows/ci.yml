@@ -7,24 +7,74 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  test-core:
+    name: Core Unit Tests
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
-
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: |
           8.0.x
           10.0.x
+    - name: Restore & Build
+      run: |
+        dotnet restore Hangfire.Dashboard.JobSearch.slnx
+        dotnet build Hangfire.Dashboard.JobSearch.slnx --no-restore --configuration Release
+    - name: Test Core
+      run: dotnet test tests/Hangfire.Dashboard.JobSearch.Tests/Hangfire.Dashboard.JobSearch.Tests.csproj --no-build --configuration Release --filter "Category!=Redis&Category!=PostgreSql&Category!=SqlServer" --verbosity normal
 
-    - name: Restore dependencies
-      run: dotnet restore Hangfire.Dashboard.JobSearch.slnx
+  test-redis:
+    name: Redis Integration Tests (Testcontainers)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          10.0.x
+    - name: Restore & Build
+      run: |
+        dotnet restore Hangfire.Dashboard.JobSearch.slnx
+        dotnet build Hangfire.Dashboard.JobSearch.slnx --no-restore --configuration Release
+    - name: Test Redis
+      run: dotnet test tests/Hangfire.Dashboard.JobSearch.Tests/Hangfire.Dashboard.JobSearch.Tests.csproj --no-build --configuration Release --filter "Category=Redis" --verbosity normal
 
-    - name: Build
-      run: dotnet build Hangfire.Dashboard.JobSearch.slnx --no-restore --configuration Release
+  test-postgresql:
+    name: PostgreSQL Integration Tests (Testcontainers)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          10.0.x
+    - name: Restore & Build
+      run: |
+        dotnet restore Hangfire.Dashboard.JobSearch.slnx
+        dotnet build Hangfire.Dashboard.JobSearch.slnx --no-restore --configuration Release
+    - name: Test PostgreSQL
+      run: dotnet test tests/Hangfire.Dashboard.JobSearch.Tests/Hangfire.Dashboard.JobSearch.Tests.csproj --no-build --configuration Release --filter "Category=PostgreSql" --verbosity normal
 
-    - name: Test
-      run: dotnet test Hangfire.Dashboard.JobSearch.slnx --no-build --configuration Release --verbosity normal
+  test-sqlserver:
+    name: SQL Server Integration Tests (Testcontainers)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          10.0.x
+    - name: Restore & Build
+      run: |
+        dotnet restore Hangfire.Dashboard.JobSearch.slnx
+        dotnet build Hangfire.Dashboard.JobSearch.slnx --no-restore --configuration Release
+    - name: Test SQL Server
+      run: dotnet test tests/Hangfire.Dashboard.JobSearch.Tests/Hangfire.Dashboard.JobSearch.Tests.csproj --no-build --configuration Release --filter "Category=SqlServer" --verbosity normal

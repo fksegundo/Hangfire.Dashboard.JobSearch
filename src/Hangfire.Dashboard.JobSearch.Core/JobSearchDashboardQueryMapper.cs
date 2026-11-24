@@ -45,13 +45,23 @@ internal static class JobSearchDashboardQueryMapper
             }
         }
 
+        var rawState = EmptyToNull(queryValueProvider("state"));
+        var state = string.Equals(rawState, "all", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : (rawState ?? "Processing");
+
         return new JobSearchQuery
         {
             JobId = EmptyToNull(queryValueProvider("jobId")),
             JobType = selectedDefinition is null
                 ? EmptyToNull(queryValueProvider("jobType"))
                 : (selectedDefinition.JobType.FullName ?? selectedDefinition.JobType.Name),
-            State = EmptyToNull(queryValueProvider("state")) ?? "Processing",
+            MethodName = selectedDefinition is null
+                ? EmptyToNull(queryValueProvider("methodName"))
+                : selectedDefinition.MethodName,
+            CreatedFrom = ParseDateTimeOffset(queryValueProvider("from")),
+            CreatedTo = ParseDateTimeOffset(queryValueProvider("to")),
+            State = state,
             SortBy = EmptyToNull(queryValueProvider("sortBy")),
             SortDescending = ParseBool(queryValueProvider("desc")),
             Sorts = ParseSorts(queryValueProvider("sort")),
@@ -115,6 +125,21 @@ internal static class JobSearchDashboardQueryMapper
 
         return string.Equals(value, "1", StringComparison.Ordinal)
             || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static DateTimeOffset? ParseDateTimeOffset(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
     }
 
     private static string? EmptyToNull(string? value)

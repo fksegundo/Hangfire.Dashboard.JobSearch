@@ -15,6 +15,9 @@
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
     <PackageReference Include="Testcontainers.Redis" Version="4.4.0" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.4.0" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.4.0" />
+    <PackageReference Include="Hangfire.MemoryStorage" Version="1.8.1.2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,6 +26,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/Hangfire.Dashboard.JobSearch/Hangfire.Dashboard.JobSearch.csproj" />
+    <ProjectReference Include="../../src/Hangfire.Dashboard.JobSearch.SqlServer/Hangfire.Dashboard.JobSearch.SqlServer.csproj" />
+    <ProjectReference Include="../../src/Hangfire.Dashboard.JobSearch.PostgreSql/Hangfire.Dashboard.JobSearch.PostgreSql.csproj" />
   </ItemGroup>
 
 </Project>

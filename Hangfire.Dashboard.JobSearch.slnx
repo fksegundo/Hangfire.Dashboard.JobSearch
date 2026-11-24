@@ -4,6 +4,10 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Hangfire.Dashboard.JobSearch/Hangfire.Dashboard.JobSearch.csproj" />
+    <Project Path="src/Hangfire.Dashboard.JobSearch.Core/Hangfire.Dashboard.JobSearch.Core.csproj" />
+    <Project Path="src/Hangfire.Dashboard.JobSearch.Redis/Hangfire.Dashboard.JobSearch.Redis.csproj" />
+    <Project Path="src/Hangfire.Dashboard.JobSearch.SqlServer/Hangfire.Dashboard.JobSearch.SqlServer.csproj" />
+    <Project Path="src/Hangfire.Dashboard.JobSearch.PostgreSql/Hangfire.Dashboard.JobSearch.PostgreSql.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Hangfire.Dashboard.JobSearch.Tests/Hangfire.Dashboard.JobSearch.Tests.csproj" />

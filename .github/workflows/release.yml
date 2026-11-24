@@ -39,8 +39,13 @@ jobs:
     - name: Run Tests
       run: dotnet test Hangfire.Dashboard.JobSearch.slnx --no-build --configuration Release --verbosity normal
 
-    - name: Pack NuGet Package
-      run: dotnet pack src/Hangfire.Dashboard.JobSearch/Hangfire.Dashboard.JobSearch.csproj --no-build --configuration Release --output dist
+    - name: Pack NuGet Packages
+      run: |
+        dotnet pack src/Hangfire.Dashboard.JobSearch.Core/Hangfire.Dashboard.JobSearch.Core.csproj --no-build --configuration Release --output dist
+        dotnet pack src/Hangfire.Dashboard.JobSearch.Redis/Hangfire.Dashboard.JobSearch.Redis.csproj --no-build --configuration Release --output dist
+        dotnet pack src/Hangfire.Dashboard.JobSearch.SqlServer/Hangfire.Dashboard.JobSearch.SqlServer.csproj --no-build --configuration Release --output dist
+        dotnet pack src/Hangfire.Dashboard.JobSearch.PostgreSql/Hangfire.Dashboard.JobSearch.PostgreSql.csproj --no-build --configuration Release --output dist
+        dotnet pack src/Hangfire.Dashboard.JobSearch/Hangfire.Dashboard.JobSearch.csproj --no-build --configuration Release --output dist
 
     - name: Upload Package Artifact
       uses: actions/upload-artifact@v4

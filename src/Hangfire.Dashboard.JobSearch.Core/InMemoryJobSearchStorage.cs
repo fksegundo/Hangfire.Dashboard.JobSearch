@@ -11,6 +11,28 @@ namespace Hangfire.Dashboard.JobSearch;
 public sealed class InMemoryJobSearchStorage : IJobSearchStorage
 {
     private readonly ConcurrentDictionary<string, JobSearchMetadata> _metadata = new ConcurrentDictionary<string, JobSearchMetadata>(StringComparer.Ordinal);
+    private readonly int? _maxEntries;
+    private readonly TimeSpan? _expiry;
+
+    public InMemoryJobSearchStorage()
+    {
+    }
+
+    public InMemoryJobSearchStorage(int? maxEntries = null, TimeSpan? expiry = null)
+    {
+        if (maxEntries.HasValue && maxEntries.Value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxEntries), "Max entries must be positive.");
+        }
+
+        if (expiry.HasValue && expiry.Value <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(expiry), "Expiry must be positive.");
+        }
+
+        _maxEntries = maxEntries;
+        _expiry = expiry;
+    }
 
     public Task SaveMetadataAsync(
         string jobId,
@@ -29,6 +51,7 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
 
         cancellationToken.ThrowIfCancellationRequested();
         _metadata[jobId] = CloneMetadata(metadata);
+        CleanupIfNeeded();
 
         return Task.CompletedTask;
     }
@@ -43,6 +66,7 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        RemoveExpired();
 
         var page = Math.Max(1, query.Page);
         var pageSize = query.PageSize <= 0 ? 20 : query.PageSize;
@@ -100,10 +124,11 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (_metadata.TryGetValue(jobId, out var metadata))
+        if (_metadata.TryGetValue(jobId, out var existing))
         {
-            metadata.State = state;
-            _metadata[jobId] = CloneMetadata(metadata);
+            var updated = CloneMetadata(existing);
+            updated.State = state;
+            _metadata[jobId] = updated;
         }
 
         return Task.CompletedTask;
@@ -119,11 +144,15 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        RemoveExpired();
 
         var baseQuery = new JobSearchQuery
         {
             JobId = query.JobId,
             JobType = query.JobType,
+            MethodName = query.MethodName,
+            CreatedFrom = query.CreatedFrom,
+            CreatedTo = query.CreatedTo,
             State = null,
             Filters = new Dictionary<string, string>(query.Filters, StringComparer.Ordinal)
         };
@@ -146,13 +175,29 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         }
 
         if (!string.IsNullOrWhiteSpace(query.State)
-            && !string.Equals(result.State, query.State, StringComparison.Ordinal))
+            && !string.Equals(result.State, query.State, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
         if (!string.IsNullOrWhiteSpace(query.JobType)
-            && !string.Equals(result.JobType, query.JobType, StringComparison.Ordinal))
+            && !string.Equals(result.JobType, query.JobType, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.MethodName)
+            && !string.Equals(result.MethodName, query.MethodName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (query.CreatedFrom.HasValue && result.CreatedAt < query.CreatedFrom.Value)
+        {
+            return false;
+        }
+
+        if (query.CreatedTo.HasValue && result.CreatedAt > query.CreatedTo.Value)
         {
             return false;
         }
@@ -160,7 +205,7 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         foreach (var filter in query.Filters.Where(filter => !string.IsNullOrWhiteSpace(filter.Value)))
         {
             if (!result.Fields.TryGetValue(filter.Key, out var value)
-                || !string.Equals(value, filter.Value, StringComparison.Ordinal))
+                || !JobSearchFilterMatcher.Matches(value, filter.Value))
             {
                 return false;
             }
@@ -207,35 +252,35 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         return results.OrderByDescending(result => result.CreatedAt).ThenBy(result => result.JobId, StringComparer.Ordinal);
     }
 
-    private static SortValue GetSortValue(JobSearchResult result, string fieldName)
+    private static JobSearchSortValue GetSortValue(JobSearchResult result, string fieldName)
     {
         if (string.Equals(fieldName, "JobId", StringComparison.Ordinal))
         {
-            return SortValue.From(result.JobId);
+            return JobSearchSortValue.From(result.JobId);
         }
 
         if (string.Equals(fieldName, "State", StringComparison.Ordinal))
         {
-            return SortValue.From(result.State);
+            return JobSearchSortValue.From(result.State);
         }
 
         if (string.Equals(fieldName, "JobType", StringComparison.Ordinal))
         {
-            return SortValue.From(result.JobType);
+            return JobSearchSortValue.From(result.JobType);
         }
 
         if (string.Equals(fieldName, "MethodName", StringComparison.Ordinal))
         {
-            return SortValue.From(result.MethodName);
+            return JobSearchSortValue.From(result.MethodName);
         }
 
         if (string.Equals(fieldName, "CreatedAt", StringComparison.Ordinal))
         {
-            return SortValue.From(result.CreatedAt.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture));
+            return JobSearchSortValue.From(result.CreatedAt.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture));
         }
 
         result.Fields.TryGetValue(fieldName, out var value);
-        return SortValue.From(value);
+        return JobSearchSortValue.From(value);
     }
 
     private static JobSearchResult ToResult(JobSearchMetadata metadata)
@@ -251,6 +296,46 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
         };
     }
 
+    private void CleanupIfNeeded()
+    {
+        RemoveExpired();
+
+        if (!_maxEntries.HasValue || _metadata.Count <= _maxEntries.Value)
+        {
+            return;
+        }
+
+        var overflow = _metadata.Count - _maxEntries.Value;
+        var oldestKeys = _metadata
+            .OrderBy(pair => pair.Value.CreatedAt)
+            .ThenBy(pair => pair.Key, StringComparer.Ordinal)
+            .Take(overflow)
+            .Select(pair => pair.Key)
+            .ToList();
+
+        foreach (var key in oldestKeys)
+        {
+            _metadata.TryRemove(key, out _);
+        }
+    }
+
+    private void RemoveExpired()
+    {
+        if (!_expiry.HasValue)
+        {
+            return;
+        }
+
+        var cutoff = DateTimeOffset.UtcNow - _expiry.Value;
+        foreach (var pair in _metadata)
+        {
+            if (pair.Value.CreatedAt < cutoff)
+            {
+                _metadata.TryRemove(pair.Key, out _);
+            }
+        }
+    }
+
     private static JobSearchMetadata CloneMetadata(JobSearchMetadata metadata)
     {
         return new JobSearchMetadata
@@ -262,43 +347,5 @@ public sealed class InMemoryJobSearchStorage : IJobSearchStorage
             CreatedAt = metadata.CreatedAt,
             Fields = new Dictionary<string, string?>(metadata.Fields, StringComparer.Ordinal)
         };
-    }
-
-    private readonly struct SortValue : IComparable<SortValue>
-    {
-        private readonly decimal _number;
-        private readonly string _text;
-
-        private SortValue(bool hasNumber, decimal number, string text)
-        {
-            HasNumber = hasNumber;
-            _number = number;
-            _text = text;
-        }
-
-        public bool HasNumber { get; }
-
-        public static SortValue From(string? value)
-        {
-            if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
-            {
-                return new SortValue(true, number, string.Empty);
-            }
-
-            return new SortValue(false, 0, value ?? string.Empty);
-        }
-
-        public int CompareTo(SortValue other)
-        {
-            var numberComparison = HasNumber.CompareTo(other.HasNumber);
-            if (numberComparison != 0)
-            {
-                return numberComparison;
-            }
-
-            return HasNumber
-                ? _number.CompareTo(other._number)
-                : string.Compare(_text, other._text, StringComparison.Ordinal);
-        }
     }
 }

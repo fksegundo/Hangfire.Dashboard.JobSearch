@@ -15,6 +15,15 @@ public sealed class JobSearchOptions
     public IReadOnlyList<JobSearchJoin> Joins => _joins;
     public Func<IServiceProvider, IJobSearchStorage>? StorageFactory { get; private set; }
 
+    /// <summary>Dashboard route path (defaults to "/job-search").</summary>
+    public string RoutePath { get; set; } = "/job-search";
+
+    /// <summary>Dashboard navigation menu title (defaults to "Job Search").</summary>
+    public string MenuTitle { get; set; } = "Job Search";
+
+    /// <summary>Default live auto-refresh interval in seconds (defaults to 5; set &lt;= 0 to disable by default).</summary>
+    public int AutoRefreshIntervalSeconds { get; set; } = 5;
+
     internal Type? StorageType => _storageType;
 
     public void AddJobDefinition(JobSearchDefinition definition)

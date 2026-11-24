@@ -34,9 +34,9 @@ internal static class JobSearchOptionsValidator
                 throw new InvalidOperationException("Field name is required for every job field.");
             }
 
-            if (definition.Fields.Any(field => string.IsNullOrWhiteSpace(field.JsonPath)))
+            if (definition.Fields.Any(field => field.ValueExtractor is null && string.IsNullOrWhiteSpace(field.JsonPath)))
             {
-                throw new InvalidOperationException("JsonPath is required for every job field.");
+                throw new InvalidOperationException("JsonPath or ValueExtractor is required for every job field.");
             }
         }
     }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Hangfire.Dashboard.JobSearch;
@@ -9,6 +10,12 @@ public sealed class JobSearchQuery
     public string? State { get; set; }
 
     public string? JobType { get; set; }
+
+    public string? MethodName { get; set; }
+
+    public DateTimeOffset? CreatedFrom { get; set; }
+
+    public DateTimeOffset? CreatedTo { get; set; }
 
     public Dictionary<string, string> Filters { get; set; } = new Dictionary<string, string>();
 

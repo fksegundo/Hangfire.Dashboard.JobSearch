@@ -50,14 +50,35 @@ public static class GlobalConfigurationExtensions
                 return;
             }
 
-            DashboardRoutes.Routes.Add("/job-search", new JobSearchDashboardRazorDispatcher(serviceProvider));
+            var options = (JobSearchOptions?)serviceProvider.GetService(typeof(JobSearchOptions));
+            var routePath = NormalizeRoutePath(options?.RoutePath);
+            var menuTitle = string.IsNullOrWhiteSpace(options?.MenuTitle) ? "Job Search" : options!.MenuTitle;
 
-            NavigationMenu.Items.Add(page => new MenuItem("Job Search", page.Url.To("/job-search"))
+            DashboardRoutes.Routes.Add(routePath, new JobSearchDashboardRazorDispatcher(serviceProvider));
+            DashboardRoutes.Routes.Add($"{routePath}/actions", new JobSearchDashboardActionsDispatcher());
+
+            NavigationMenu.Items.Add(page => new MenuItem(menuTitle, page.Url.To(routePath))
             {
-                Active = page.RequestPath.StartsWith("/job-search", StringComparison.OrdinalIgnoreCase)
+                Active = page.RequestPath.StartsWith(routePath, StringComparison.OrdinalIgnoreCase)
             });
 
             _dashboardRegistered = true;
         }
+    }
+
+    internal static string NormalizeRoutePath(string? routePath)
+    {
+        if (string.IsNullOrWhiteSpace(routePath))
+        {
+            return "/job-search";
+        }
+
+        var trimmed = routePath!.Trim().TrimEnd('/');
+        if (trimmed.Length == 0)
+        {
+            return "/job-search";
+        }
+
+        return trimmed.StartsWith("/", StringComparison.Ordinal) ? trimmed : "/" + trimmed;
     }
 }

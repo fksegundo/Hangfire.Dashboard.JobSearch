@@ -171,18 +171,72 @@ public sealed class InMemoryJobSearchStorageTests
         Assert.Empty(page.Items);
     }
 
+    [Fact]
+    public async Task SearchAsync_FiltersByMethodNameAndCaseInsensitiveField()
+    {
+        var storage = new InMemoryJobSearchStorage();
+        await storage.SaveMetadataAsync("1", CreateMetadata("1", field1: "ABC", methodName: "MethodOne"));
+        await storage.SaveMetadataAsync("2", CreateMetadata("2", field1: "ABC", methodName: "MethodTwo"));
+
+        var page = await storage.SearchAsync(new JobSearchQuery
+        {
+            JobType = "WorkerA",
+            MethodName = "MethodOne",
+            Filters = { ["Field1"] = "abc" }
+        });
+
+        var result = Assert.Single(page.Items);
+        Assert.Equal("1", result.JobId);
+
+        var counts = await storage.CountByStateAsync(new JobSearchQuery
+        {
+            JobType = "WorkerA",
+            MethodName = "MethodOne"
+        });
+        Assert.Equal(1, counts["Enqueued"]);
+    }
+
+    [Fact]
+    public async Task SaveMetadataAsync_EvictsOldestWhenMaxEntriesExceeded()
+    {
+        var storage = new InMemoryJobSearchStorage(maxEntries: 2);
+        var t0 = DateTimeOffset.UtcNow;
+        await storage.SaveMetadataAsync("1", CreateMetadata("1", createdAt: t0.AddMinutes(-3)));
+        await storage.SaveMetadataAsync("2", CreateMetadata("2", createdAt: t0.AddMinutes(-2)));
+        await storage.SaveMetadataAsync("3", CreateMetadata("3", createdAt: t0.AddMinutes(-1)));
+
+        var page = await storage.SearchAsync(new JobSearchQuery());
+        Assert.Equal(2, page.TotalCount);
+        Assert.DoesNotContain(page.Items, i => i.JobId == "1");
+        Assert.Contains(page.Items, i => i.JobId == "2");
+        Assert.Contains(page.Items, i => i.JobId == "3");
+    }
+
+    [Fact]
+    public async Task SearchAsync_RemovesExpiredEntries()
+    {
+        var storage = new InMemoryJobSearchStorage(expiry: TimeSpan.FromMinutes(10));
+        await storage.SaveMetadataAsync("old", CreateMetadata("old", createdAt: DateTimeOffset.UtcNow.AddMinutes(-20)));
+        await storage.SaveMetadataAsync("fresh", CreateMetadata("fresh", createdAt: DateTimeOffset.UtcNow));
+
+        var page = await storage.SearchAsync(new JobSearchQuery());
+        var item = Assert.Single(page.Items);
+        Assert.Equal("fresh", item.JobId);
+    }
+
     private static JobSearchMetadata CreateMetadata(
         string jobId,
         string field1 = "123",
         string field2 = "42",
         string state = "Enqueued",
-        DateTimeOffset? createdAt = null)
+        DateTimeOffset? createdAt = null,
+        string methodName = "RunJobAsync")
     {
         return new JobSearchMetadata
         {
             JobId = jobId,
             JobType = "WorkerA",
-            MethodName = "RunJobAsync",
+            MethodName = methodName,
             State = state,
             CreatedAt = createdAt ?? DateTimeOffset.Parse("2026-05-03T10:00:00Z"),
             Fields =

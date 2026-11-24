@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Hangfire.Dashboard.JobSearch</RootNamespace>
+
+    <PackageId>fksegundo.Hangfire.Dashboard.JobSearch.Redis</PackageId>
+    <Version>1.1.0</Version>
+    <Authors>fksegundo</Authors>
+    <Description>Redis storage provider for Hangfire.Dashboard.JobSearch using StackExchange.Redis.</Description>
+    <RepositoryUrl>https://github.com/fksegundo/Hangfire.Dashboard.JobSearch</RepositoryUrl>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)..\..\dist</PackageOutputPath>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hangfire.Dashboard.JobSearch.Core\Hangfire.Dashboard.JobSearch.Core.csproj" />
+    <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hangfire.Dashboard.JobSearch.Tests" />
+  </ItemGroup>
+
+</Project>

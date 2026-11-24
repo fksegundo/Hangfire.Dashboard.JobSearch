@@ -44,6 +44,39 @@ public sealed class FilterAndRegistrationTests
     }
 
     [Fact]
+    public async Task ClientFilter_UsesProvidedInitialState()
+    {
+        var options = new JobSearchOptions();
+        options.AddJobDefinition(new JobSearchDefinition
+        {
+            JobType = typeof(WorkerA),
+            MethodName = nameof(WorkerA.RunJobAsync),
+            Fields =
+            {
+                new JobSearchField
+                {
+                    Name = "Field1",
+                    ArgumentIndex = 0,
+                    JsonPath = "$.Field1"
+                }
+            }
+        });
+
+        var storage = new InMemoryJobSearchStorage();
+        var extractor = new DefaultJobMetadataExtractor(options);
+        var logger = new ListLogger<JobSearchClientFilter>();
+        var filter = new JobSearchClientFilter(options, extractor, storage, logger);
+
+        filter.ProcessCreatedJob("job-sched", CreateJob(new JobAArgs { Field1 = "abc" }), "Scheduled");
+
+        var page = await storage.SearchAsync(new JobSearchQuery { State = "Scheduled" });
+        var result = Assert.Single(page.Items);
+        Assert.Equal("job-sched", result.JobId);
+        Assert.Equal("Scheduled", result.State);
+        Assert.Empty(logger.Errors);
+    }
+
+    [Fact]
     public async Task StateFilter_UpdatesJobState()
     {
         var storage = new InMemoryJobSearchStorage();
