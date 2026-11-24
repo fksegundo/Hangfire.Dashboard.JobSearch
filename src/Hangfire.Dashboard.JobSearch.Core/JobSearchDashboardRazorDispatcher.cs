@@ -257,22 +257,31 @@ internal sealed class JobSearchDashboardRazorDispatcher : IDashboardDispatcher
                 }
 
                 var details = monitoring.JobDetails(item.JobId);
-                var latest = details?.History?.FirstOrDefault();
-                if (latest?.Data is null)
+                if (details?.History is null || details.History.Count == 0)
+                {
+                    continue;
+                }
+
+                var matchingState = details.History
+                    .Where(h => string.Equals(h.StateName, item.State, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(h => h.CreatedAt)
+                    .FirstOrDefault();
+
+                if (matchingState?.Data is null)
                 {
                     continue;
                 }
 
                 if (string.Equals(item.State, "Failed", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (latest.Data.TryGetValue("ExceptionMessage", out var msg) && !string.IsNullOrWhiteSpace(msg))
+                    if (matchingState.Data.TryGetValue("ExceptionMessage", out var msg) && !string.IsNullOrWhiteSpace(msg))
                     {
                         item.LastError = msg;
                     }
                 }
                 else if (string.Equals(item.State, "Succeeded", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (latest.Data.TryGetValue("PerformanceDuration", out var durStr)
+                    if (matchingState.Data.TryGetValue("PerformanceDuration", out var durStr)
                         && long.TryParse(durStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ms)
                         && ms >= 0)
                     {

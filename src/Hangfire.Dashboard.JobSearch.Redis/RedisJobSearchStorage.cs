@@ -43,9 +43,11 @@ public sealed class RedisJobSearchStorage : IJobSearchStorage, IJobSearchBulkChi
         "local baseKey = KEYS[2]\n" +
         "local createdBase = false\n" +
         "if baseCount > 1 then\n" +
-        "  local args = {}\n" +
+        "  local args = {'ZINTERSTORE', KEYS[1], baseCount}\n" +
         "  for i = 2, baseCount + 1 do args[#args + 1] = KEYS[i] end\n" +
-        "  redis.call('ZINTERSTORE', KEYS[1], baseCount, unpack(args), 'AGGREGATE', 'MIN')\n" +
+        "  args[#args + 1] = 'AGGREGATE'\n" +
+        "  args[#args + 1] = 'MIN'\n" +
+        "  redis.call(unpack(args))\n" +
         "  baseKey = KEYS[1]\n" +
         "  createdBase = true\n" +
         "end\n" +

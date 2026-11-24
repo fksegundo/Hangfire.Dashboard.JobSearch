@@ -9,6 +9,7 @@ using Xunit;
 
 namespace Hangfire.Dashboard.JobSearch.Tests;
 
+[Trait("Category", "Redis")]
 public sealed class RedisJobSearchStorageTests : IAsyncLifetime
 {
     private RedisContainer _container = null!;

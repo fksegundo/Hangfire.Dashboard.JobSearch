@@ -62,10 +62,13 @@ internal static class JobSearchDashboardRenderer
         html.Append(".hfjs-bulk-bar{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;border:1px solid var(--hfjs-border);border-radius:6px;background:var(--hfjs-head);font-size:12px;color:var(--hfjs-text);}");
         html.Append(".hfjs-table-wrap{border:1px solid var(--hfjs-border);border-radius:6px;overflow:auto;background:var(--hfjs-bg);width:100%;}");
         html.Append(".hfjs-table{width:100%;min-width:1200px;border-collapse:collapse;font-size:13px;}");
-        html.Append(".hfjs-table th,.hfjs-table td{padding:8px 10px;border-bottom:1px solid var(--hfjs-border);vertical-align:top;white-space:normal;color:var(--hfjs-text);}");
-        html.Append(".hfjs-table th{background:var(--hfjs-head);font-weight:700;position:sticky;top:0;}");
-        html.Append(".hfjs-sort-links a{margin-left:4px;font-size:12px;color:var(--hfjs-link);text-decoration:none;display:inline-block;padding:1px 3px;border-radius:4px;}");
+        html.Append(".hfjs-table th,.hfjs-table td{padding:8px 10px;border-bottom:1px solid var(--hfjs-border);vertical-align:top;color:var(--hfjs-text);}");
+        html.Append(".hfjs-table th{background:var(--hfjs-head);font-weight:700;position:sticky;top:0;white-space:nowrap;}");
+        html.Append(".hfjs-sort-links{display:inline-flex;align-items:center;gap:1px;margin-left:4px;white-space:nowrap;}");
+        html.Append(".hfjs-sort-links a{font-size:11px;color:var(--hfjs-link);text-decoration:none;display:inline-block;padding:1px 2px;border-radius:4px;}");
         html.Append(".hfjs-sort-links a:hover{background:var(--hfjs-chip);}");
+        html.Append(".hfjs-nowrap{white-space:nowrap;}");
+        html.Append(".hfjs-details-cell{display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:nowrap;}");
         html.Append(".hfjs-pager{margin-top:12px;display:flex;justify-content:space-between;align-items:center;color:var(--hfjs-text);gap:12px;flex-wrap:wrap;}");
         html.Append(".hfjs-pager .pagination{margin:0;}");
         html.Append(".hfjs-pager .pagination>li>a{color:var(--hfjs-link);background:var(--hfjs-bg);border-color:var(--hfjs-border);}");
@@ -83,7 +86,8 @@ internal static class JobSearchDashboardRenderer
         html.Append(".hfjs-advanced[open]>summary::before{transform:rotate(90deg);}");
         html.Append(".hfjs-advanced>.hfjs-filters{padding:10px 12px;margin-bottom:0;background:var(--hfjs-bg);border-top:1px solid var(--hfjs-border);border-radius:0 0 6px 6px;}");
         html.Append(".hfjs-active-count{margin-left:8px;padding:1px 8px;background:var(--hfjs-link);color:#fff;border-radius:10px;font-size:11px;font-weight:normal;}");
-        html.Append(".hfjs-expand{cursor:pointer;background:none;border:none;padding:0 4px;color:var(--hfjs-link);font-size:11px;display:inline-block;transition:transform 0.15s;}");
+        html.Append(".hfjs-expand{cursor:pointer;background:none;border:none;padding:0 4px;color:var(--hfjs-link);font-size:11px;display:inline-block;transition:transform 0.15s;outline:none;}");
+        html.Append(".hfjs-expand:focus-visible{outline:2px solid var(--hfjs-link);border-radius:3px;}");
         html.Append(".hfjs-expand:hover{background:var(--hfjs-chip);border-radius:3px;}");
         html.Append(".hfjs-expand[data-expanded='true']{transform:rotate(90deg);}");
         html.Append(".hfjs-child-count{background:var(--hfjs-chip);padding:1px 8px;border-radius:10px;font-size:11px;margin-right:4px;color:var(--hfjs-text);}");
@@ -319,16 +323,16 @@ internal static class JobSearchDashboardRenderer
                     .Append("</span>");
             }
             html.Append("</td>")
-                .Append("<td>").Append(E(item.MethodName)).Append("</td>")
-                .Append("<td>").Append(E(item.CreatedAt.ToString("u"))).Append("</td>");
+                .Append("<td class=\"hfjs-nowrap\">").Append(E(item.MethodName)).Append("</td>")
+                .Append("<td class=\"hfjs-nowrap\">").Append(E(item.CreatedAt.ToString("u"))).Append("</td>");
 
             foreach (var field in model.DisplayFields)
             {
                 item.Fields.TryGetValue(field, out var value);
-                html.Append("<td>").Append(E(value)).Append("</td>");
+                html.Append("<td class=\"hfjs-nowrap\">").Append(E(value)).Append("</td>");
             }
 
-            html.Append("<td>");
+            html.Append("<td><div class=\"hfjs-details-cell\">");
             if (hasJoin)
             {
                 RenderJoinBadgeAndSummary(html, item, hasChildren);
@@ -349,7 +353,7 @@ internal static class JobSearchDashboardRenderer
                     .Append("</span>");
             }
 
-            html.Append("</td></tr>");
+            html.Append("</div></td></tr>");
 
             if (hasChildren)
             {
