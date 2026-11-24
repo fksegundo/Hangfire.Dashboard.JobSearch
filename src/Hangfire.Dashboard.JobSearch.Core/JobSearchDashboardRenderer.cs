@@ -49,6 +49,7 @@ internal static class JobSearchDashboardRenderer
         html.Append("@media (prefers-color-scheme: dark){:root{--hfjs-bg:#1b1f27;--hfjs-border:#364152;--hfjs-head:#252d3a;--hfjs-text:#e5e7eb;--hfjs-muted:#cbd5e1;--hfjs-chip:#2f3b4d;--hfjs-link:#9ab4ff;--hfjs-danger:#f87171;}}");
         html.Append(".hfjs-toolbar{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:10px;align-items:end;margin-bottom:12px;}");
         html.Append(".hfjs-filters{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:10px;margin-bottom:12px;}");
+        html.Append(".hfjs-field{overflow:hidden;}");
         html.Append(".hfjs-field label{display:block;font-weight:600;margin-bottom:4px;color:var(--hfjs-muted);font-size:12px;}");
         html.Append(".hfjs-sort-chip{display:inline-block;padding:2px 8px;background:var(--hfjs-chip);border-radius:12px;margin-right:6px;font-size:12px;color:var(--hfjs-text);}");
         html.Append(".hfjs-state-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 10px 0;}");
@@ -73,7 +74,8 @@ internal static class JobSearchDashboardRenderer
         html.Append(".hfjs-pager .pagination{margin:0;}");
         html.Append(".hfjs-pager .pagination>li>a{color:var(--hfjs-link);background:var(--hfjs-bg);border-color:var(--hfjs-border);}");
         html.Append(".hfjs-pager .pagination>li.active>a{background:var(--hfjs-link);border-color:var(--hfjs-link);color:#fff;}");
-        html.Append(".hfjs-toolbar .form-control,.hfjs-filters .form-control{max-width:100%;}");
+        html.Append(".hfjs-toolbar .form-control,.hfjs-filters .form-control{max-width:100%;height:34px;box-sizing:border-box;}");
+        html.Append(".hfjs-field select.form-control{appearance:none;-webkit-appearance:none;-moz-appearance:none;padding-right:28px;background-color:var(--hfjs-bg);color:var(--hfjs-text);background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M2 4l4 4 4-4z'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 10px center;background-size:12px 12px;}");
         html.Append(".hfjs-live-bar{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--hfjs-muted);margin-bottom:8px;}");
         html.Append(".hfjs-toggle-btn,.hfjs-action-btn{cursor:pointer;background:var(--hfjs-chip);border:1px solid var(--hfjs-border);color:var(--hfjs-text);padding:2px 10px;border-radius:12px;font-size:12px;line-height:1.4;}");
         html.Append(".hfjs-toggle-btn:hover,.hfjs-action-btn:hover{background:var(--hfjs-border);}");

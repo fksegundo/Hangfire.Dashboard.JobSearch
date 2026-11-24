@@ -113,9 +113,10 @@ Navigate to:
 Comprehensive guides and architectural details are available in the [`/docs`](docs/) directory:
 
 - [Architecture & Internals](docs/architecture.md): Lifecycle hooks, filters, metadata extraction pipeline.
-- [Redis Storage Provider](docs/storage-redis.md): Server-side indexing data structures, Lua transitions, TTL cleanup.
+- [Redis Storage Provider](docs/storage-redis.md): Server-side indexing data structures, Cluster hash tags, Lua transitions, TTL cleanup.
+- [SQL Server & PostgreSQL Providers + Backfill](docs/storage-sql.md): Relational storage setup, indexes, and backfilling existing Hangfire jobs.
 - [Parent/Child Job Joins](docs/parent-child-joins.md): Fan-out correlation configuration and resolver.
-- [Configuration & UI Guide](docs/configuration-guide.md): Field options, sorting, filters, and custom storages.
+- [Configuration & UI Guide](docs/configuration-guide.md): Fluent API, attributes, sorting, filters, export, quick actions, and custom storages.
 
 ## Running the Example Application
 

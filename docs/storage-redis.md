@@ -16,8 +16,12 @@ All Redis keys are partitioned using a configurable prefix (default: `hangfire:j
 | `{prefix}:v2:idx` | `SortedSet` | Global index containing all active jobs. Score = `createdAt` timestamp (epoch milliseconds). |
 | `{prefix}:v2:idx:state:{state}` | `SortedSet` | State index partitioned by lowercased state name (e.g. `enqueued`, `succeeded`). |
 | `{prefix}:v2:idx:type:{type}` | `SortedSet` | Type index partitioned by worker type. |
-| `{prefix}:v2:idx:f:{field}:{value}` | `SortedSet` | Secondary field index for exact-match filtering. |
-| `{prefix}:v2:rev:{jobId}` | `Set` | Reverse lookup index containing all Redis keys referencing this `jobId`, guaranteeing clean teardown. |
+| `{prefix}:v2:idx:method:{method}` | `SortedSet` | Method index partitioned by lowercased method name. |
+| `{prefix}:v2:idx:f:{field}:{value}` | `SortedSet` | Secondary field index for exact-match and multi-value (`ZUNIONSTORE`) filtering. |
+| `{prefix}:v2:lex:f:{field}` | `SortedSet` | Lexicographical index (`value\0jobId`) for `ZRANGEBYLEX` prefix (`prefix*`) filtering. |
+| `{prefix}:v2:rev:{jobId}` | `Set` | Reverse lookup index containing all Redis keys referencing this `jobId` (updated atomically on state transitions). |
+
+> **Redis Cluster support:** Pass `useClusterHashTag: true` to `UseRedisStorage(...)` to wrap the key prefix in `{...}` hash tags so all `ZINTERSTORE` and Lua script keys map to the same hash slot.
 
 ---
 
